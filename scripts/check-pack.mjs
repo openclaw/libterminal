@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,6 +32,31 @@ try {
   if (pkg.name !== "@openclaw/libterminal") {
     throw new Error(`unexpected package name: ${pkg.name}`);
   }
+
+  const archive = join(process.cwd(), filename);
+  writeFileSync(join(workdir, "package.json"), '{"private":true,"type":"module"}\n');
+  execFileSync(
+    "npm",
+    ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", archive],
+    { cwd: workdir, stdio: "pipe" },
+  );
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `await Promise.all(${JSON.stringify([
+        "@openclaw/libterminal",
+        "@openclaw/libterminal/protocol",
+        "@openclaw/libterminal/stream",
+        "@openclaw/libterminal/browser",
+        "@openclaw/libterminal/node",
+        "@openclaw/libterminal/worker",
+        "@openclaw/libterminal/testing",
+      ])}.map((specifier) => import(specifier)));`,
+    ],
+    { cwd: workdir, stdio: "pipe" },
+  );
 
   rmSync(filename, { force: true });
 } finally {

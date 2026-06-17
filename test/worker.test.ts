@@ -10,6 +10,11 @@ import {
   type WebSocketPayload,
 } from "../src/worker.js";
 
+function acceptsNativeWebSocket(socket: WebSocket): void {
+  bridgeWebSockets(socket, socket);
+}
+void acceptsNativeWebSocket;
+
 describe("bridgeWebSockets", () => {
   it("forwards duplex messages in order", async () => {
     const left = new FakeWebSocket();
