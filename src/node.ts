@@ -175,10 +175,10 @@ export async function attachLocalStdio(
   stdin.on("data", writeInput);
   stdout.on("resize", resize);
   options?.signal?.addEventListener("abort", abort, { once: true });
-  resize();
 
   let outputCompleted = false;
   try {
+    resize();
     for (;;) {
       const next = aborted
         ? await Promise.race([output.next(), aborted.promise])

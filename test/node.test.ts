@@ -194,6 +194,46 @@ describe("attachLocalStdio", () => {
     expect(rawModes).toEqual([true, false]);
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
   });
+
+  it("restores stdio when the initial resize fails", async () => {
+    const rawModes: boolean[] = [];
+    const removed: string[] = [];
+    let paused = false;
+    const stdin = {
+      isTTY: true,
+      isRaw: false,
+      readableFlowing: null,
+      setRawMode: (raw: boolean) => rawModes.push(raw),
+      resume: () => undefined,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdin:${event}`),
+      pause: () => {
+        paused = true;
+      },
+    } as unknown as NodeJS.ReadStream;
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdout:${event}`),
+    } as unknown as NodeJS.WriteStream;
+
+    await expect(
+      attachLocalStdio(
+        { output: neverOutput(), close: async () => undefined },
+        {
+          stdin,
+          stdout,
+          onResize: () => {
+            throw new Error("resize failed");
+          },
+        },
+      ),
+    ).rejects.toThrow("resize failed");
+    expect(rawModes).toEqual([true, false]);
+    expect(removed).toEqual(["stdin:data", "stdout:resize"]);
+    expect(paused).toBe(true);
+  });
 });
 
 describe("readGhosttyAsset", () => {
