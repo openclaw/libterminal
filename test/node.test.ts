@@ -32,6 +32,28 @@ describe("spawnLocalPty", () => {
     expect(fake.kills).toEqual(["SIGTERM"]);
     expect((await iterator.next()).done).toBe(true);
   });
+
+  it("bounds queued PTY output and preserves split UTF-8 input", async () => {
+    const fake = new FakePtyDriver();
+    const dropped: number[] = [];
+    const session = await spawnLocalPty({
+      command: "codex",
+      cwd: "/workspace",
+      driver: fake,
+      outputBufferBytes: 4,
+      onOutputDrop: (bytes) => dropped.push(bytes),
+    });
+    fake.emitData("1234");
+    fake.emitData("56");
+    const iterator = session.output[Symbol.asyncIterator]();
+    expect(new TextDecoder().decode((await iterator.next()).value)).toBe("56");
+    expect(dropped).toEqual([4]);
+
+    const euro = new TextEncoder().encode("€");
+    await session.write?.(euro.subarray(0, 2));
+    await session.write?.(euro.subarray(2));
+    expect(fake.writes).toEqual(["€"]);
+  });
 });
 
 describe("readGhosttyAsset", () => {

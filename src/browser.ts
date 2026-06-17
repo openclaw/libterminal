@@ -79,11 +79,13 @@ export async function createGhosttyTerminal(
 ): Promise<GhosttyTerminalController> {
   options.onStatus?.({ state: "loading" });
   throwIfAborted(options.signal);
+  let terminal: Terminal | undefined;
+  let controller: BrowserTerminalController | undefined;
   try {
     const runtime = options.runtime ?? (await loadGhosttyRuntime(options.runtimeOptions));
     throwIfAborted(options.signal);
     const readOnly = options.readOnly ?? true;
-    const terminal = new runtime.Terminal({
+    terminal = new runtime.Terminal({
       ...options.terminalOptions,
       disableStdin: readOnly,
       ghostty: runtime.ghostty,
@@ -91,11 +93,16 @@ export async function createGhosttyTerminal(
     const fitAddon = new runtime.FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(options.parent);
-    const controller = new BrowserTerminalController(terminal, fitAddon, readOnly, options);
+    controller = new BrowserTerminalController(terminal, fitAddon, readOnly, options);
     controller.start();
     options.onStatus?.({ state: "ready" });
     return controller;
   } catch (cause) {
+    if (controller) {
+      controller.dispose();
+    } else {
+      terminal?.dispose();
+    }
     options.onStatus?.({ state: "error", error: cause });
     if (cause instanceof LibterminalError) {
       throw cause;
@@ -138,6 +145,7 @@ class BrowserTerminalController implements GhosttyTerminalController {
   private resizeSubscription?: IDisposable;
   private disposed = false;
   private currentReadOnly: boolean;
+  private readonly disposeController = new AbortController();
 
   constructor(
     terminal: Terminal,
@@ -199,12 +207,18 @@ class BrowserTerminalController implements GhosttyTerminalController {
 
   async attach(source: AsyncIterable<Uint8Array>, signal?: AbortSignal): Promise<void> {
     this.assertOpen();
+    const combined = combineAbortSignals(
+      this.disposeController.signal,
+      signal ?? this.options.signal,
+    );
     try {
-      await attachTerminalStream(this.terminal, source, signal ?? this.options.signal);
+      await attachTerminalStream(this.terminal, source, combined.signal);
       this.options.onStatus?.({ state: "ended" });
     } catch (error) {
       this.options.onStatus?.({ state: "error", error });
       throw error;
+    } finally {
+      combined.dispose();
     }
   }
 
@@ -213,6 +227,7 @@ class BrowserTerminalController implements GhosttyTerminalController {
       return;
     }
     this.disposed = true;
+    this.disposeController.abort("terminal disposed");
     this.inputSubscription?.dispose();
     this.resizeSubscription?.dispose();
     this.fitAddon.dispose();
@@ -256,4 +271,31 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
   }
+}
+
+function combineAbortSignals(
+  first: AbortSignal,
+  second?: AbortSignal,
+): { signal: AbortSignal; dispose(): void } {
+  if (!second) {
+    return { signal: first, dispose: () => undefined };
+  }
+  const controller = new AbortController();
+  const abortFirst = () => controller.abort(first.reason);
+  const abortSecond = () => controller.abort(second.reason);
+  if (first.aborted) {
+    abortFirst();
+  } else if (second.aborted) {
+    abortSecond();
+  } else {
+    first.addEventListener("abort", abortFirst, { once: true });
+    second.addEventListener("abort", abortSecond, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      first.removeEventListener("abort", abortFirst);
+      second.removeEventListener("abort", abortSecond);
+    },
+  };
 }

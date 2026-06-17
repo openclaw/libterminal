@@ -44,6 +44,8 @@ export type SpawnLocalPtyOptions = {
   driver?: PtyDriver;
   signal?: AbortSignal;
   onOutput?: (bytes: Uint8Array) => void;
+  outputBufferBytes?: number;
+  onOutputDrop?: (droppedBytes: number) => void;
 };
 
 export type LocalPtySession = TerminalDuplex & {
@@ -64,7 +66,6 @@ export type GhosttyAsset = {
 };
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
 
 export async function loadNodePtyDriver(): Promise<PtyDriver> {
   await ensureNodePtySpawnHelperExecutable();
@@ -89,6 +90,7 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
   throwIfAborted(options.signal);
   const driver = options.driver ?? (await loadNodePtyDriver());
   const size = assertTerminalSize(options.size ?? { columns: 120, rows: 34 });
+  const inputDecoder = new TextDecoder();
   const terminal = driver.spawn(options.command, options.args ?? [], {
     name: options.name ?? process.env.TERM ?? "xterm-256color",
     columns: size.columns,
@@ -96,7 +98,7 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
     cwd: options.cwd,
     env: options.env ?? currentEnvironment(),
   });
-  const output = new AsyncByteQueue();
+  const output = new AsyncByteQueue(options.outputBufferBytes, options.onOutputDrop);
   const dataSubscription = terminal.onData((data) => {
     const bytes = textEncoder.encode(data);
     output.push(bytes);
@@ -118,7 +120,12 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
   return {
     output,
     exit,
-    write: async (bytes) => terminal.write(textDecoder.decode(bytes)),
+    write: async (bytes) => {
+      const decoded = inputDecoder.decode(bytes, { stream: true });
+      if (decoded) {
+        terminal.write(decoded);
+      }
+    },
     resize: async (nextSize) => {
       assertTerminalSize(nextSize);
       terminal.resize(nextSize.columns, nextSize.rows);
@@ -208,9 +215,20 @@ export async function readGhosttyAsset(pathname: string): Promise<GhosttyAsset |
 }
 
 class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
+  private readonly maxBytes: number;
+  private readonly onDrop?: (droppedBytes: number) => void;
   private chunks: Uint8Array[] = [];
+  private bytes = 0;
   private waiters: Array<(result: IteratorResult<Uint8Array>) => void> = [];
   private closed = false;
+
+  constructor(maxBytes = 1024 * 1024, onDrop?: (droppedBytes: number) => void) {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+      throw new RangeError("outputBufferBytes must be a positive safe integer");
+    }
+    this.maxBytes = maxBytes;
+    this.onDrop = onDrop;
+  }
 
   [Symbol.asyncIterator](): AsyncIterableIterator<Uint8Array> {
     return this;
@@ -225,12 +243,28 @@ class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
       waiter({ done: false, value: bytes.slice() });
       return;
     }
-    this.chunks.push(bytes.slice());
+    const chunk =
+      bytes.byteLength > this.maxBytes
+        ? bytes.slice(bytes.byteLength - this.maxBytes)
+        : bytes.slice();
+    let droppedBytes = bytes.byteLength - chunk.byteLength;
+    while (this.chunks.length > 0 && this.bytes + chunk.byteLength > this.maxBytes) {
+      const removed = this.chunks.shift();
+      const removedBytes = removed?.byteLength ?? 0;
+      this.bytes -= removedBytes;
+      droppedBytes += removedBytes;
+    }
+    this.chunks.push(chunk);
+    this.bytes += chunk.byteLength;
+    if (droppedBytes > 0) {
+      this.onDrop?.(droppedBytes);
+    }
   }
 
   async next(): Promise<IteratorResult<Uint8Array>> {
     const chunk = this.chunks.shift();
     if (chunk) {
+      this.bytes -= chunk.byteLength;
       return { done: false, value: chunk };
     }
     if (this.closed) {

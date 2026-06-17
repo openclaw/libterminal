@@ -43,6 +43,24 @@ describe("bridgeWebSockets", () => {
     expect(right.closed).toEqual({ code: 1008, reason: "terminal control revoked" });
   });
 
+  it("fails closed when control reconciliation throws", async () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    const errors: unknown[] = [];
+    const bridge = bridgeWebSockets(left, right, {
+      canSendLeft: async () => true,
+      reconcileSubscription: () => {
+        throw new Error("lookup failed");
+      },
+      controlCheckIntervalMs: 0,
+      onError: (error) => errors.push(error),
+    });
+    await expect(bridge.revalidateControl()).resolves.toBe(false);
+    expect(errors).toHaveLength(1);
+    expect(left.closed).toEqual({ code: 1011, reason: "terminal bridge error" });
+    expect(right.closed).toEqual({ code: 1011, reason: "terminal bridge error" });
+  });
+
   it("tracks and forwards right-output acknowledgements", async () => {
     const left = new FakeWebSocket();
     const right = new FakeWebSocket();

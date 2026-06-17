@@ -110,11 +110,19 @@ export function bridgeWebSockets(
   };
 
   const revalidateControl = async (): Promise<boolean> => {
-    options.reconcileSubscription?.();
-    controlCheckInFlight ??= verifyControl().finally(() => {
-      controlCheckInFlight = undefined;
-    });
-    return controlCheckInFlight;
+    if (stopped) {
+      return false;
+    }
+    try {
+      options.reconcileSubscription?.();
+      controlCheckInFlight ??= verifyControl().finally(() => {
+        controlCheckInFlight = undefined;
+      });
+      return await controlCheckInFlight;
+    } catch (error) {
+      fail(error);
+      return false;
+    }
   };
 
   function onLeftMessage(event: WebSocketMessageEventLike): void {
