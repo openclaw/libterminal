@@ -272,16 +272,16 @@ function pairIsOpen(left: WebSocketLike, right: WebSocketLike): boolean {
 
 function closePeer(event: WebSocketCloseEventLike, peer: WebSocketLike): void {
   if (canClose(peer)) {
-    peer.close(event.code || 1000, cleanReason(event.reason || "peer closed"));
+    safeClose(peer, event.code || 1000, event.reason || "peer closed");
   }
 }
 
 function closePair(left: WebSocketLike, right: WebSocketLike, code: number, reason: string): void {
   if (canClose(left)) {
-    left.close(code, reason);
+    safeClose(left, code, reason);
   }
   if (canClose(right)) {
-    right.close(code, reason);
+    safeClose(right, code, reason);
   }
 }
 
@@ -290,7 +290,44 @@ function canClose(socket: WebSocketLike): boolean {
 }
 
 function cleanReason(value: unknown): string {
-  return (typeof value === "string" ? value : "").trim().slice(0, 120);
+  const source = (typeof value === "string" ? value : "").trim();
+  let result = "";
+  let bytes = 0;
+  for (const character of source) {
+    const characterBytes = encoder.encode(character).byteLength;
+    if (bytes + characterBytes > 123) {
+      break;
+    }
+    result += character;
+    bytes += characterBytes;
+  }
+  return result;
+}
+
+function safeClose(socket: WebSocketLike, code: number, reason: string): void {
+  const safeCode = validCloseCode(code) ? code : 1000;
+  const safeReason = cleanReason(reason);
+  try {
+    socket.close(safeCode, safeReason);
+  } catch {
+    try {
+      socket.close(1000, safeReason);
+    } catch {
+      try {
+        socket.close();
+      } catch {
+        // Closing is best-effort after a peer has already failed.
+      }
+    }
+  }
+}
+
+function validCloseCode(code: number): boolean {
+  return (
+    code === 1000 ||
+    (code >= 1001 && code <= 1014 && code !== 1004 && code !== 1005 && code !== 1006) ||
+    (code >= 3000 && code <= 4999)
+  );
 }
 
 function hasArrayBuffer(value: unknown): value is { arrayBuffer(): Promise<ArrayBuffer> } {

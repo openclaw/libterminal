@@ -74,6 +74,15 @@ describe("bridgeWebSockets", () => {
     await vi.waitFor(() => expect(right.sent).toEqual(['{"type":"ack","bytes":5}']));
     expect(bridge.rightOutputAcknowledgementBytes).toBe(0);
   });
+
+  it("sanitizes abnormal peer close metadata", () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    bridgeWebSockets(left, right, { controlCheckIntervalMs: 0 });
+    left.emitClose(1006, "é".repeat(100));
+    expect(right.closed?.code).toBe(1000);
+    expect(new TextEncoder().encode(right.closed?.reason).byteLength).toBeLessThanOrEqual(123);
+  });
 });
 
 describe("Worker message helpers", () => {
@@ -142,6 +151,13 @@ class FakeWebSocket implements WebSocketLike {
   emitMessage(data: unknown): void {
     for (const listener of this.messages) {
       listener({ data });
+    }
+  }
+
+  emitClose(code: number, reason: string): void {
+    this.readyState = 3;
+    for (const listener of this.closes) {
+      listener({ code, reason });
     }
   }
 }
