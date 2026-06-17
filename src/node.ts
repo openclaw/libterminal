@@ -65,6 +65,12 @@ export type GhosttyAsset = {
   contentType: string;
 };
 
+export const GHOSTTY_ASSET_PATHS = {
+  module: "/vendor/ghostty-web.js",
+  wasm: "/vendor/ghostty-vt.wasm",
+  browserExternal: "/vendor/__vite-browser-external-2447137e.js",
+} as const;
+
 const textEncoder = new TextEncoder();
 
 export async function loadNodePtyDriver(): Promise<PtyDriver> {
@@ -339,16 +345,19 @@ function ghosttyAssets(): Map<string, { path: string; contentType: string }> {
   const modulePath = fileURLToPath(import.meta.resolve("ghostty-web"));
   const distPath = path.dirname(modulePath);
   return new Map([
-    ["/vendor/ghostty-web.js", { path: modulePath, contentType: "text/javascript; charset=utf-8" }],
     [
-      "/vendor/ghostty-vt.wasm",
+      GHOSTTY_ASSET_PATHS.module,
+      { path: modulePath, contentType: "text/javascript; charset=utf-8" },
+    ],
+    [
+      GHOSTTY_ASSET_PATHS.wasm,
       {
         path: fileURLToPath(import.meta.resolve("ghostty-web/ghostty-vt.wasm")),
         contentType: "application/wasm",
       },
     ],
     [
-      "/vendor/__vite-browser-external-2447137e.js",
+      GHOSTTY_ASSET_PATHS.browserExternal,
       {
         path: path.join(distPath, "__vite-browser-external-2447137e.js"),
         contentType: "text/javascript; charset=utf-8",

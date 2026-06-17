@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attachLocalStdio,
+  GHOSTTY_ASSET_PATHS,
   readGhosttyAsset,
   spawnLocalPty,
   type DisposableLike,
@@ -184,9 +185,14 @@ describe("attachLocalStdio", () => {
 });
 
 describe("readGhosttyAsset", () => {
-  it("resolves the bundled Ghostty module and WASM", async () => {
+  it("exports and resolves the bundled Ghostty asset manifest", async () => {
+    expect(GHOSTTY_ASSET_PATHS).toEqual({
+      module: "/vendor/ghostty-web.js",
+      wasm: "/vendor/ghostty-vt.wasm",
+      browserExternal: "/vendor/__vite-browser-external-2447137e.js",
+    });
     await expect(readGhosttyAsset("/missing")).resolves.toBeNull();
-    const wasm = await readGhosttyAsset("/vendor/ghostty-vt.wasm");
+    const wasm = await readGhosttyAsset(GHOSTTY_ASSET_PATHS.wasm);
     expect(wasm?.contentType).toBe("application/wasm");
     expect(wasm?.body.byteLength).toBeGreaterThan(0);
   });
