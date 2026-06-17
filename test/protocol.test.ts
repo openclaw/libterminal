@@ -6,6 +6,7 @@ import {
   decodeSubscribePayload,
   decodeTerminalFrame,
   encodeAckPayload,
+  encodeJsonPayload,
   encodeResizePayload,
   encodeSubscribePayload,
   encodeTerminalFrame,
@@ -111,6 +112,17 @@ describe("terminal protocol v2", () => {
       expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_frame" }),
     );
     expect(tryDecodeTerminalFrame(malformed)).toBeNull();
+  });
+
+  it("rejects JSON values that cannot produce a payload", () => {
+    expect(() => encodeJsonPayload(undefined)).toThrowError(
+      expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_frame" }),
+    );
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() => encodeJsonPayload(circular)).toThrowError(
+      expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_frame" }),
+    );
   });
 });
 

@@ -246,7 +246,18 @@ export function decodeAckPayload(payload: Uint8Array): number {
 }
 
 export function encodeJsonPayload(value: unknown): Uint8Array {
-  return textEncoder.encode(JSON.stringify(value));
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(value);
+  } catch (cause) {
+    throw new LibterminalError("invalid_frame", "terminal JSON payload is not serializable", {
+      cause,
+    });
+  }
+  if (json === undefined) {
+    throw invalidFrame("terminal JSON payload is not serializable");
+  }
+  return textEncoder.encode(json);
 }
 
 export function decodeJsonPayload(payload: Uint8Array): unknown {

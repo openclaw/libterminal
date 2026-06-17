@@ -19,6 +19,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Close browser stream sources when terminal writes fail.
+- Reject JSON values that cannot produce a valid protocol payload.
 - Reject unsupported terminal message types before encoding rather than
   allowing byte coercion.
 - Allow subscribe payloads to request service-selected dimensions with zero
