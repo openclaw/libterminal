@@ -19,6 +19,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Reject unsupported terminal message types before encoding rather than
+  allowing byte coercion.
 - Allow subscribe payloads to request service-selected dimensions with zero
   columns and rows while keeping resize validation strict.
 - Always restore local stdio listeners, flowing state, and raw mode when

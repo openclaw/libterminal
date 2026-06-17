@@ -76,6 +76,9 @@ export function encodeTerminalFrame(
   if (sessionIdBytes.byteLength > maxSessionIdBytes) {
     throw invalidFrame(`session id exceeds ${maxSessionIdBytes} bytes`);
   }
+  if (!isTerminalMessageType(params.type)) {
+    throw invalidFrame(`terminal frame message type ${String(params.type)} is unsupported`);
+  }
 
   const headerLength = 2 + 1 + 1 + 4 + sessionIdBytes.length + 4;
   const frameLength = headerLength + payload.length;

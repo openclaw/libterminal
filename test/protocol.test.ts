@@ -92,6 +92,13 @@ describe("terminal protocol v2", () => {
   });
 
   it("rejects unsupported versions and malformed lengths", () => {
+    expect(() =>
+      encodeTerminalFrame({
+        type: 257 as unknown as TerminalMessageType,
+        sessionId: "coerced-type",
+      }),
+    ).toThrowError(expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_frame" }));
+
     const unsupported = fromHex(vectors.pingFrame);
     unsupported[2] = 99;
     expect(() => decodeTerminalFrame(unsupported)).toThrowError(
