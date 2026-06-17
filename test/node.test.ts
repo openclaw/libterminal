@@ -83,10 +83,15 @@ describe("attachLocalStdio", () => {
     const controller = new AbortController();
     const reasons: Array<string | undefined> = [];
     const removed: string[] = [];
+    let paused = false;
     const stdin = {
       isTTY: false,
+      readableFlowing: null,
       on: () => undefined,
       off: (event: string) => removed.push(`stdin:${event}`),
+      pause: () => {
+        paused = true;
+      },
     } as unknown as NodeJS.ReadStream;
     const stdout = {
       columns: 80,
@@ -111,6 +116,7 @@ describe("attachLocalStdio", () => {
     await attached;
     expect(reasons).toEqual(["aborted"]);
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
+    expect(paused).toBe(true);
   });
 
   it("closes the output iterator when stdout fails", async () => {
@@ -126,8 +132,10 @@ describe("attachLocalStdio", () => {
     };
     const stdin = {
       isTTY: false,
+      readableFlowing: null,
       on: () => undefined,
       off: () => undefined,
+      pause: () => undefined,
     } as unknown as NodeJS.ReadStream;
     const stdout = {
       columns: 80,
@@ -160,10 +168,14 @@ describe("attachLocalStdio", () => {
     const stdin = {
       isTTY: true,
       isRaw: false,
+      readableFlowing: true,
       setRawMode: (raw: boolean) => rawModes.push(raw),
       resume: () => undefined,
       on: () => undefined,
       off: (event: string) => removed.push(`stdin:${event}`),
+      pause: () => {
+        throw new Error("flowing stdin must stay flowing");
+      },
     } as unknown as NodeJS.ReadStream;
     const stdout = {
       columns: 80,

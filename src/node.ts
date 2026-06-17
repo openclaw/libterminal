@@ -155,6 +155,7 @@ export async function attachLocalStdio(
   const output = terminal.output[Symbol.asyncIterator]();
   const aborted = abortPromise(options?.signal);
   const previousRaw = stdin.isTTY ? stdin.isRaw : false;
+  const previousFlowing = stdin.readableFlowing;
   const writeInput = (data: Buffer | string) => {
     const bytes = typeof data === "string" ? textEncoder.encode(data) : data;
     const write = terminal.write?.(bytes);
@@ -205,6 +206,9 @@ export async function attachLocalStdio(
       options?.signal?.removeEventListener("abort", abort);
       if (stdin.isTTY) {
         stdin.setRawMode(previousRaw);
+      }
+      if (previousFlowing !== true) {
+        stdin.pause();
       }
     }
   }

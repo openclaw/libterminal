@@ -21,5 +21,5 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 - Allow subscribe payloads to request service-selected dimensions with zero
   columns and rows while keeping resize validation strict.
-- Always restore local stdio listeners and raw mode when terminal output
-  iteration or iterator cleanup fails.
+- Always restore local stdio listeners, flowing state, and raw mode when
+  terminal output ends, aborts, or iterator cleanup fails.
