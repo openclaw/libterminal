@@ -184,19 +184,22 @@ export async function attachLocalStdio(
     }
   } finally {
     aborted?.dispose();
-    if (!outputCompleted) {
-      const returned = output.return?.();
-      if (options?.signal?.aborted) {
-        void returned;
-      } else {
-        await returned;
+    try {
+      if (!outputCompleted) {
+        const returned = output.return?.();
+        if (options?.signal?.aborted) {
+          void returned;
+        } else {
+          await returned;
+        }
       }
-    }
-    stdin.off("data", writeInput);
-    stdout.off("resize", resize);
-    options?.signal?.removeEventListener("abort", abort);
-    if (stdin.isTTY) {
-      stdin.setRawMode(previousRaw);
+    } finally {
+      stdin.off("data", writeInput);
+      stdout.off("resize", resize);
+      options?.signal?.removeEventListener("abort", abort);
+      if (stdin.isTTY) {
+        stdin.setRawMode(previousRaw);
+      }
     }
   }
 }

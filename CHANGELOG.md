@@ -14,3 +14,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 - Add ordered Worker-compatible WebSocket bridging with fail-closed control
   revalidation and acknowledgement accounting.
 - Add reusable terminal, WebSocket, byte, and clock test doubles.
+
+### Fixed
+
+- Always restore local stdio listeners and raw mode when terminal output
+  iteration or iterator cleanup fails.

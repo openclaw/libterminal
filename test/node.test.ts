@@ -144,6 +144,43 @@ describe("attachLocalStdio", () => {
     ).rejects.toThrow("EPIPE");
     expect(returned).toBe(true);
   });
+
+  it("restores stdio when closing a failed output iterator also fails", async () => {
+    const rawModes: boolean[] = [];
+    const removed: string[] = [];
+    const output = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ done: false as const, value: new Uint8Array([1]) }),
+        return: async () => {
+          throw new Error("return failed");
+        },
+      }),
+    };
+    const stdin = {
+      isTTY: true,
+      isRaw: false,
+      setRawMode: (raw: boolean) => rawModes.push(raw),
+      resume: () => undefined,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdin:${event}`),
+    } as unknown as NodeJS.ReadStream;
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdout:${event}`),
+      write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
+        callback(new Error("EPIPE"));
+        return false;
+      },
+    } as unknown as NodeJS.WriteStream;
+
+    await expect(
+      attachLocalStdio({ output, close: async () => undefined }, { stdin, stdout }),
+    ).rejects.toThrow("return failed");
+    expect(rawModes).toEqual([true, false]);
+    expect(removed).toEqual(["stdin:data", "stdout:resize"]);
+  });
 });
 
 describe("readGhosttyAsset", () => {
