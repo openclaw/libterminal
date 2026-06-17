@@ -111,6 +111,39 @@ describe("attachLocalStdio", () => {
     expect(reasons).toEqual(["aborted"]);
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
   });
+
+  it("closes the output iterator when stdout fails", async () => {
+    let returned = false;
+    const output = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ done: false as const, value: new Uint8Array([1]) }),
+        return: async () => {
+          returned = true;
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    const stdin = {
+      isTTY: false,
+      on: () => undefined,
+      off: () => undefined,
+    } as unknown as NodeJS.ReadStream;
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      on: () => undefined,
+      off: () => undefined,
+      write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
+        callback(new Error("EPIPE"));
+        return false;
+      },
+    } as unknown as NodeJS.WriteStream;
+
+    await expect(
+      attachLocalStdio({ output, close: async () => undefined }, { stdin, stdout }),
+    ).rejects.toThrow("EPIPE");
+    expect(returned).toBe(true);
+  });
 });
 
 describe("readGhosttyAsset", () => {

@@ -170,20 +170,27 @@ export async function attachLocalStdio(
   options?.signal?.addEventListener("abort", abort, { once: true });
   resize();
 
+  let outputCompleted = false;
   try {
     for (;;) {
       const next = aborted
         ? await Promise.race([output.next(), aborted.promise])
         : await output.next();
       if (next === abortedResult || next.done) {
+        outputCompleted = next !== abortedResult;
         break;
       }
       await writeToStream(stdout, next.value);
     }
   } finally {
     aborted?.dispose();
-    if (options?.signal?.aborted) {
-      void output.return?.();
+    if (!outputCompleted) {
+      const returned = output.return?.();
+      if (options?.signal?.aborted) {
+        void returned;
+      } else {
+        await returned;
+      }
     }
     stdin.off("data", writeInput);
     stdout.off("resize", resize);
