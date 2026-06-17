@@ -115,8 +115,24 @@ SECRET_VALUE_PATTERNS = [
     re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
     re.compile(r"\bya29\.[0-9A-Za-z_-]{20,}\b"),
 ]
-MAX_BUNDLE_TEXT_BYTES = 180_000
+MAX_BUNDLE_TEXT_BYTES = 500_000
 DEFAULT_ENGINE_PATHS = ("/usr/local/bin", "/usr/bin", "/bin")
+CODEX_DISABLED_TOOL_FEATURES = (
+    "apps",
+    "browser_use",
+    "browser_use_external",
+    "computer_use",
+    "hooks",
+    "image_generation",
+    "in_app_browser",
+    "multi_agent",
+    "plugins",
+    "shell_tool",
+    "skill_mcp_dependency_install",
+    "standalone_web_search",
+    "tool_call_mcp_elicitation",
+    "unified_exec",
+)
 DEFAULT_MODEL_BY_ENGINE = {
     "codex": "gpt-5.5",
     "claude": "claude-fable-5",
@@ -744,10 +760,13 @@ def validate_git_ref(repo: Path, ref: str, label: str) -> str:
     return ref
 
 
-def bounded(text: str, limit: int = 180_000) -> str:
+def bounded(text: str, limit: int = MAX_BUNDLE_TEXT_BYTES) -> str:
     if len(text) <= limit:
         return text
-    return text[:limit] + f"\n\n[truncated at {limit} characters]\n"
+    raise SystemExit(
+        f"review input exceeds {limit} characters; split the change or review smaller commits "
+        "instead of accepting an incomplete review"
+    )
 
 
 def bounded_field(text: str, limit: int) -> str:
@@ -774,11 +793,10 @@ def read_text(path: Path, limit: int = MAX_BUNDLE_TEXT_BYTES) -> str:
     if b"\0" in data:
         return "[binary file omitted]"
     text = data.decode("utf-8", errors="replace")
-    if len(text) > limit:
-        text = text[:limit]
-        truncated = True
     if truncated:
-        return text + f"\n\n[truncated at {limit} characters]\n"
+        raise SystemExit(
+            f"review input file exceeds {limit} bytes: {path}; split or reduce it before review"
+        )
     return text
 
 
@@ -854,9 +872,11 @@ def file_bundle_risk(
     if not path.is_file():
         return "not a regular file"
     try:
-        data, _ = read_prefix(path, MAX_BUNDLE_TEXT_BYTES)
+        data, truncated = read_prefix(path, MAX_BUNDLE_TEXT_BYTES)
     except SystemExit as exc:
         return str(exc)
+    if truncated:
+        return f"file exceeds {MAX_BUNDLE_TEXT_BYTES} bytes"
     if b"\0" in data:
         return None if allow_binary_omission else "binary file"
     if secret_text_risk(data.decode("utf-8", errors="replace")):
@@ -1127,8 +1147,7 @@ def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, e
         - Do not modify files.
         - Do not invoke nested reviewers or review tools.
         - Forbidden nested review commands include: codex review, autoreview, claude review, oracle review.
-        - You may use read-only tools and web search to inspect files, dependency contracts, upstream docs, current behavior, and security implications.
-        - Shell commands, if available, must be read-only inspection commands. Do not run tests, formatters, package installs, generators, network mutation commands, git mutation commands, or commands that write files.
+        - Review only the complete change bundle below. Tools and web search are intentionally disabled.
         - Report only actionable defects introduced or exposed by this change.
         - Prefer high-signal findings over style feedback.
         - Include security findings: injection, secret leaks, authz/authn bypass, path traversal, unsafe deserialization, unsafe filesystem or shell use, privacy leaks, and credential handling.
@@ -1150,13 +1169,6 @@ def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, e
         {bundle}
         """
     ).strip()
-
-
-def write_json_temp(data: dict[str, Any]) -> Path:
-    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
-    with handle:
-        json.dump(data, handle)
-    return Path(handle.name)
 
 
 def toml_quoted_key_segment(value: str) -> str:
@@ -1260,6 +1272,13 @@ def codex_exec_isolation_flags() -> list[str]:
     return ["--ignore-user-config", "--ignore-rules"]
 
 
+def codex_no_tool_flags() -> list[str]:
+    flags: list[str] = []
+    for feature in CODEX_DISABLED_TOOL_FEATURES:
+        flags.extend(["--disable", feature])
+    return flags
+
+
 def claude_review_isolation_flags() -> list[str]:
     return [
         "--safe-mode",
@@ -1293,7 +1312,10 @@ def parse_cli_version(text: str) -> tuple[int, int, int] | None:
 def ensure_claude_isolation_supported(args: argparse.Namespace, repo: Path) -> None:
     claude_bin = resolve_command(args.claude_bin, repo)
     engine_env = safe_engine_env(repo, [Path(claude_bin).parent])
-    result = run([claude_bin, "--version"], repo, check=False, env=engine_env)
+    with tempfile.TemporaryDirectory(prefix="autoreview-claude-probe.") as tempdir:
+        probe_cwd = Path(tempdir)
+        result = run([claude_bin, "--version"], probe_cwd, check=False, env=engine_env)
+        help_result = run([claude_bin, "--help"], probe_cwd, check=False, env=engine_env)
     if result.returncode != 0:
         raise SystemExit(f"claude engine requires Claude Code >= {format_version(CLAUDE_SAFE_MODE_MIN_VERSION)}; --version failed")
     version = parse_cli_version(result.stdout or result.stderr)
@@ -1304,7 +1326,6 @@ def ensure_claude_isolation_supported(args: argparse.Namespace, repo: Path) -> N
             f"claude engine requires Claude Code >= {format_version(CLAUDE_SAFE_MODE_MIN_VERSION)} "
             f"for --safe-mode (found {format_version(version)})"
         )
-    help_result = run([claude_bin, "--help"], repo, check=False, env=engine_env)
     help_text = f"{help_result.stdout}\n{help_result.stderr}"
     required_flags = ["--safe-mode", "--setting-sources", "--strict-mcp-config", "--disallowedTools"]
     missing = [flag for flag in required_flags if flag not in help_text]
@@ -1350,54 +1371,57 @@ def format_version(version: tuple[int, int, int]) -> str:
 
 
 def run_codex(args: argparse.Namespace, repo: Path, prompt: str) -> str:
-    if not args.tools:
-        raise SystemExit("--no-tools is not supported by the Codex engine; use --engine claude --no-tools for a no-tools run")
-    schema_path = write_json_temp(SCHEMA)
-    output_path = Path(tempfile.NamedTemporaryFile("w", suffix=".json", delete=False).name)
-    cmd = [resolve_command(args.codex_bin, repo), "--ask-for-approval", "never"]
-    if args.web_search:
-        cmd.append("--search")
-    if args.model:
-        cmd.extend(["--model", args.model])
-    if args.thinking:
-        cmd.extend(["-c", f'model_reasoning_effort="{args.thinking}"'])
-    cmd.extend(codex_config_isolation_flags(repo))
-    cmd.extend(codex_auth_config_flags())
-    cmd.append("exec")
-    if args.stream_engine_output:
-        cmd.append("--json")
-    cmd.extend(
-        [
-            *codex_exec_isolation_flags(),
-            "--ephemeral",
-            "-C",
-            str(repo),
-            "-s",
-            "read-only",
-            "--output-schema",
-            str(schema_path),
-            "--output-last-message",
-            str(output_path),
-            "-",
+    with tempfile.TemporaryDirectory(prefix="autoreview-codex.") as tempdir:
+        neutral_root = Path(tempdir)
+        schema_path = neutral_root / "schema.json"
+        output_path = neutral_root / "output.json"
+        schema_path.write_text(json.dumps(SCHEMA))
+        cmd = [
+            resolve_command(args.codex_bin, repo),
+            "--ask-for-approval",
+            "never",
+            "--strict-config",
+            *codex_no_tool_flags(),
         ]
-    )
-    result = run_with_heartbeat(
-        cmd,
-        repo,
-        input_text=prompt,
-        label="codex",
-        stream_output=args.stream_engine_output,
-        stream_display=CodexStreamDisplay() if args.stream_engine_output else None,
-        env=safe_engine_env(repo, [Path(cmd[0]).parent]),
-    )
-    try:
-        output = output_path.read_text()
-    finally:
-        schema_path.unlink(missing_ok=True)
-        output_path.unlink(missing_ok=True)
-    if result.returncode != 0:
-        raise SystemExit(f"codex engine failed ({result.returncode})\n{result.stderr or result.stdout}")
-    return output or result.stdout
+        if args.model:
+            cmd.extend(["--model", args.model])
+        if args.thinking:
+            cmd.extend(["-c", f'model_reasoning_effort="{args.thinking}"'])
+        cmd.extend(codex_config_isolation_flags(repo))
+        cmd.extend(codex_auth_config_flags())
+        cmd.append("exec")
+        if args.stream_engine_output:
+            cmd.append("--json")
+        cmd.extend(
+            [
+                *codex_exec_isolation_flags(),
+                "--ephemeral",
+                "--skip-git-repo-check",
+                "-C",
+                str(neutral_root),
+                "-s",
+                "read-only",
+                "--output-schema",
+                str(schema_path),
+                "--output-last-message",
+                str(output_path),
+                "-",
+            ]
+        )
+        result = run_with_heartbeat(
+            cmd,
+            neutral_root,
+            input_text=prompt,
+            label="codex",
+            stream_output=args.stream_engine_output,
+            stream_display=CodexStreamDisplay() if args.stream_engine_output else None,
+            env=safe_engine_env(repo, [Path(cmd[0]).parent]),
+            resolve_root=repo,
+        )
+        output = output_path.read_text() if output_path.exists() else ""
+        if result.returncode != 0:
+            raise SystemExit(f"codex engine failed ({result.returncode})\n{result.stderr or result.stdout}")
+        return output or result.stdout
 
 
 def run_claude(args: argparse.Namespace, repo: Path, prompt: str) -> str:
@@ -1412,10 +1436,7 @@ def run_claude(args: argparse.Namespace, repo: Path, prompt: str) -> str:
         "--json-schema",
         json.dumps(SCHEMA),
     ]
-    if args.tools:
-        cmd.extend(["--allowedTools", claude_allowed_tools(args)])
-    else:
-        cmd.extend(["--tools", ""])
+    cmd.extend(["--tools", ""])
     if args.stream_engine_output:
         cmd.append("--verbose")
     if args.model:
@@ -1424,15 +1445,17 @@ def run_claude(args: argparse.Namespace, repo: Path, prompt: str) -> str:
         cmd.extend(["--fallback-model", args.fallback_model])
     if args.thinking:
         cmd.extend(["--effort", args.thinking])
-    result = run_with_heartbeat(
-        cmd,
-        repo,
-        input_text=prompt,
-        label="claude",
-        stream_output=args.stream_engine_output,
-        stream_display=ClaudeStreamDisplay() if args.stream_engine_output else None,
-        env=safe_engine_env(repo, [Path(cmd[0]).parent]),
-    )
+    with tempfile.TemporaryDirectory(prefix="autoreview-claude.") as tempdir:
+        result = run_with_heartbeat(
+            cmd,
+            Path(tempdir),
+            input_text=prompt,
+            label="claude",
+            stream_output=args.stream_engine_output,
+            stream_display=ClaudeStreamDisplay() if args.stream_engine_output else None,
+            env=safe_engine_env(repo, [Path(cmd[0]).parent]),
+            resolve_root=repo,
+        )
     if result.returncode != 0:
         raise SystemExit(f"claude engine failed ({result.returncode})\n{result.stderr or result.stdout}")
     return result.stdout
@@ -1474,49 +1497,9 @@ def run_droid(args: argparse.Namespace, repo: Path, prompt: str) -> str:
 
 
 def run_copilot(args: argparse.Namespace, repo: Path, prompt: str) -> str:
-    if args.thinking:
-        raise SystemExit("--thinking is not supported by the copilot engine")
-    if not args.tools:
-        raise SystemExit("--no-tools is not supported by the copilot engine; copilot requires a read-only file view tool to load the review bundle without exposing it in argv")
-    with tempfile.TemporaryDirectory(prefix="autoreview-copilot.") as tempdir:
-        prompt_path = Path(tempdir) / "prompt.txt"
-        prompt_path.write_text(prompt)
-        os.chmod(prompt_path, 0o600)
-        cmd = [
-            resolve_command(args.copilot_bin, repo),
-            "-C",
-            tempdir,
-            "-p",
-            "Read ./prompt.txt and follow it exactly. Return only the requested JSON object.",
-            "--output-format",
-            "json",
-            "--stream",
-            "on" if args.stream_engine_output else "off",
-            "--no-ask-user",
-            "--disable-builtin-mcps",
-        ]
-        if args.model:
-            cmd.extend(["--model", args.model])
-        available_tools = ["read_agent", "rg", "view"]
-        allowed_tools = available_tools[:]
-        if args.web_search:
-            available_tools.append("web_fetch")
-            allowed_tools.append("web_fetch")
-            cmd.append("--allow-all-urls")
-        cmd.append(f"--available-tools={','.join(available_tools)}")
-        for tool in allowed_tools:
-            cmd.append(f"--allow-tool={tool}")
-        result = run_with_heartbeat(
-            cmd,
-            Path(tempdir),
-            label="copilot",
-            stream_output=args.stream_engine_output,
-            resolve_root=repo,
-            env=safe_engine_env(repo, [Path(cmd[0]).parent]),
-        )
-    if result.returncode != 0:
-        raise SystemExit(f"copilot engine failed ({result.returncode})\n{result.stderr or result.stdout}")
-    return result.stdout
+    raise SystemExit(
+        "copilot engine is disabled because its review mode cannot enforce a no-tools read jail"
+    )
 
 
 def build_opencode_cmd(args: argparse.Namespace, repo: Path) -> list[str]:
@@ -1537,26 +1520,9 @@ def build_opencode_cmd(args: argparse.Namespace, repo: Path) -> list[str]:
 
 
 def run_opencode(args: argparse.Namespace, repo: Path, prompt: str) -> str:
-    if not args.tools:
-        raise SystemExit("--no-tools is not supported by the opencode engine")
-    cmd = build_opencode_cmd(args, repo)
-    with tempfile.TemporaryDirectory(prefix="autoreview-opencode-run.") as tempdir:
-        result = run_with_heartbeat(
-            cmd,
-            Path(tempdir),
-            input_text=prompt,
-            label="opencode",
-            stream_output=args.stream_engine_output,
-            env=safe_engine_env(
-                repo,
-                [Path(cmd[0]).parent],
-                opencode_review_env(args.web_search),
-            ),
-            resolve_root=repo,
-        )
-    if result.returncode != 0:
-        raise SystemExit(f"opencode engine failed ({result.returncode})\n{result.stderr or result.stdout}")
-    return result.stdout
+    raise SystemExit(
+        "opencode engine is disabled because its review mode cannot enforce a no-tools read jail"
+    )
 
 
 def run_pi(args: argparse.Namespace, repo: Path, prompt: str) -> str:
@@ -1570,10 +1536,7 @@ def run_pi(args: argparse.Namespace, repo: Path, prompt: str) -> str:
         cmd.extend(["--model", args.model])
     if args.thinking:
         cmd.extend(["--thinking", args.thinking])
-    if args.tools:
-        cmd.extend(["--tools", "read,grep,find,ls"])
-    else:
-        cmd.append("--no-tools")
+    cmd.append("--no-tools")
     with tempfile.TemporaryDirectory(prefix="autoreview-pi-run.") as tempdir:
         result = run_with_heartbeat(
             cmd,
@@ -1717,13 +1680,6 @@ def format_codex_usage(usage: dict[str, Any]) -> str:
     ]
     parts = [f"{field}={usage[field]}" for field in fields if isinstance(usage.get(field), int)]
     return "codex usage: " + " ".join(parts) if parts else "codex usage: unavailable"
-
-
-def claude_allowed_tools(args: argparse.Namespace) -> str:
-    tools = [tool.strip() for tool in args.claude_allowed_tools.split(",") if tool.strip()]
-    if not args.web_search:
-        tools = [tool for tool in tools if tool not in {"WebSearch", "WebFetch"}]
-    return ",".join(tools)
 
 
 def extract_json(text: str) -> dict[str, Any]:
@@ -2018,27 +1974,23 @@ def self_test_engine_isolation() -> int:
         codex_bin = root / "codex"
         claude_bin = root / "claude"
         pi_bin = root / "pi"
-        opencode_bin = root / "opencode"
         record_path = root / "record.json"
         pi_invocations_path = root / "pi-invocations.jsonl"
         hostile_ps_path = root / "hostile-ps-ran"
         write_executable(codex_bin, fake_codex_script())
         write_executable(claude_bin, fake_claude_script())
         write_executable(pi_bin, fake_pi_script())
-        write_executable(opencode_bin, fake_opencode_script())
         write_executable(repo / "ps", f"#!/usr/bin/env python3\nfrom pathlib import Path\nPath({str(hostile_ps_path)!r}).write_text('ran')\n")
 
         args = argparse.Namespace(
             codex_bin=str(codex_bin),
             claude_bin=str(claude_bin),
             pi_bin=str(pi_bin),
-            opencode_bin=str(opencode_bin),
-            tools=True,
-            web_search=True,
+            tools=False,
+            web_search=False,
             model=None,
             thinking=None,
             stream_engine_output=False,
-            claude_allowed_tools="Read,Grep,Glob,WebSearch,WebFetch",
         )
 
         os.environ["AUTOREVIEW_FAKE_RECORD"] = str(record_path)
@@ -2072,8 +2024,9 @@ def self_test_engine_isolation() -> int:
                 'cli_auth_credentials_store="auto"',
                 'forced_login_method="chatgpt"',
                 'forced_chatgpt_workspace_id=["workspace-one", "workspace-two"]',
+                "--strict-config",
+                "--skip-git-repo-check",
                 "--ephemeral",
-                str(repo),
                 "read-only",
             ]:
                 if required not in codex_argv:
@@ -2081,8 +2034,13 @@ def self_test_engine_isolation() -> int:
             for forbidden in ["hostile-user-model"]:
                 if forbidden in codex_argv:
                     raise SystemExit(f"codex isolation self-test failed: leaked {forbidden}")
-            if Path(codex_record["cwd"]).resolve() != repo.resolve():
-                raise SystemExit("codex isolation self-test failed: wrong cwd")
+            for flag in codex_no_tool_flags():
+                if flag not in codex_argv:
+                    raise SystemExit(f"codex isolation self-test failed: missing {flag}")
+            if Path(codex_record["cwd"]).resolve() == repo.resolve():
+                raise SystemExit("codex isolation self-test failed: review ran inside hostile repo")
+            if Path(codex_argv[codex_argv.index("-C") + 1]).resolve() == repo.resolve():
+                raise SystemExit("codex isolation self-test failed: -C points at hostile repo")
 
             run_claude(args, repo, "review hostile patch")
             claude_record = json.loads(record_path.read_text())
@@ -2090,13 +2048,15 @@ def self_test_engine_isolation() -> int:
             for required in claude_review_isolation_flags():
                 if required not in claude_argv:
                     raise SystemExit(f"claude isolation self-test failed: missing {required}")
-            if Path(claude_record["cwd"]).resolve() != repo.resolve():
-                raise SystemExit("claude isolation self-test failed: wrong cwd")
+            if claude_argv[claude_argv.index("--tools") + 1] != "":
+                raise SystemExit("claude isolation self-test failed: tools are not disabled")
+            if Path(claude_record["cwd"]).resolve() == repo.resolve():
+                raise SystemExit("claude isolation self-test failed: review ran inside hostile repo")
 
             run_pi(args, repo, f"review hostile patch\nRepository: {repo}")
             pi_record = json.loads(record_path.read_text())
             pi_argv = pi_record["argv"]
-            for required in ["--print", *pi_review_isolation_flags(), "--tools", "read,grep,find,ls"]:
+            for required in ["--print", *pi_review_isolation_flags(), "--no-tools"]:
                 if required not in pi_argv:
                     raise SystemExit(f"pi isolation self-test failed: missing {required}")
             if Path(pi_record["cwd"]).resolve() == repo.resolve():
@@ -2114,31 +2074,14 @@ def self_test_engine_isolation() -> int:
                 if Path(entry["cwd"]).resolve() == repo.resolve():
                     raise SystemExit("pi isolation self-test failed: probe ran inside hostile repo")
 
-            run_opencode(args, repo, "review hostile patch")
-            opencode_record = json.loads(record_path.read_text())
-            opencode_argv = opencode_record["argv"]
-            for required in ["run", "--dir", str(repo), "--pure", "--format", "json"]:
-                if required not in opencode_argv:
-                    raise SystemExit(f"opencode isolation self-test failed: missing {required}")
-            if "--dangerously-skip-permissions" in opencode_argv:
-                raise SystemExit("opencode isolation self-test failed: skip-permissions present")
-            if Path(opencode_record["cwd"]).resolve() == repo.resolve():
-                raise SystemExit("opencode isolation self-test failed: review ran inside hostile repo")
-            if opencode_record["stdin"] != "review hostile patch":
-                raise SystemExit("opencode isolation self-test failed: prompt not delivered over stdin")
-            if "review hostile patch" in opencode_argv:
-                raise SystemExit("opencode isolation self-test failed: prompt leaked into argv")
-            opencode_env = opencode_record["env"]
-            if opencode_env.get("OPENCODE_DISABLE_PROJECT_CONFIG") != "1":
-                raise SystemExit("opencode isolation self-test failed: project config env missing")
-            if opencode_env.get("OPENCODE_DISABLE_AUTOUPDATE") != "1":
-                raise SystemExit("opencode isolation self-test failed: autoupdate env missing")
-            config = json.loads(opencode_env["OPENCODE_CONFIG_CONTENT"])
-            if config.get("instructions") != [] or config.get("plugin") != [] or config.get("command") != {}:
-                raise SystemExit("opencode isolation self-test failed: project-controlled extensions not cleared")
-            for disabled_tool in ("bash", "edit", "skill", "task", "todowrite", "write"):
-                if config.get("tools", {}).get(disabled_tool) is not False:
-                    raise SystemExit(f"opencode isolation self-test failed: {disabled_tool} tool not disabled")
+            for disabled_engine in (run_copilot, run_opencode):
+                try:
+                    disabled_engine(args, repo, "review hostile patch")
+                except SystemExit as exc:
+                    if "cannot enforce a no-tools read jail" not in str(exc):
+                        raise
+                else:
+                    raise SystemExit("disabled engine isolation self-test failed")
             if hostile_ps_path.exists():
                 raise SystemExit("heartbeat metrics isolation self-test failed: repo-local ps executed")
 
@@ -2604,18 +2547,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--copilot-bin", default=os.environ.get("COPILOT_BIN", "copilot"))
     parser.add_argument("--opencode-bin", default=os.environ.get("OPENCODE_BIN", "opencode"))
     parser.add_argument("--pi-bin", default=os.environ.get("PI_BIN", "pi"))
-    parser.add_argument("--no-tools", dest="tools", action="store_false", default=True, help="Disable tools for engines that support it. Codex, copilot, and opencode reject no-tools review.")
+    parser.add_argument("--no-tools", dest="tools", action="store_false", default=False, help="Compatibility flag; reviewer tools are always disabled.")
     parser.add_argument("--self-test-opencode-jsonl-parser", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--self-test-opencode-isolation", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--self-test-opencode-real-project-isolation", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--no-web-search", dest="web_search", action="store_false", default=True)
-    parser.add_argument(
-        "--claude-allowed-tools",
-        default=os.environ.get(
-            "AUTOREVIEW_CLAUDE_TOOLS",
-            "Read,Grep,Glob,WebSearch,WebFetch",
-        ),
-    )
+    parser.add_argument("--no-web-search", dest="web_search", action="store_false", default=False, help="Compatibility flag; reviewer web search is always disabled.")
     parser.add_argument("--prompt", action="append", help="Additional review instruction text.")
     parser.add_argument("--prompt-file", action="append", help="Additional review instruction file.")
     parser.add_argument("--dataset", action="append", help="Extra evidence file to include in the review bundle.")

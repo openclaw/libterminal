@@ -128,20 +128,17 @@ class AutoreviewHardeningTests(unittest.TestCase):
 
             self.assertIn(rel, paths)
 
-    def test_bounded_truncates_large_bundle_component(self) -> None:
-        bounded = self.helper["bounded"]("x" * 25, 10)
+    def test_bounded_rejects_large_bundle_component(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "review input exceeds 10 characters"):
+            self.helper["bounded"]("x" * 25, 10)
 
-        self.assertEqual(bounded, "x" * 10 + "\n\n[truncated at 10 characters]\n")
-
-    def test_read_text_truncates_without_scanning_tail(self) -> None:
+    def test_read_text_rejects_oversized_input(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             path = Path(tempdir) / "large.txt"
-            path.write_bytes(b"x" * 200_000 + b"\0tail")
+            path.write_bytes(b"x" * 500_001)
 
-            text = self.helper["read_text"](path)
-
-            self.assertIn("[truncated at 180000 characters]", text)
-            self.assertNotEqual(text, "[binary file omitted]")
+            with self.assertRaisesRegex(SystemExit, "review input file exceeds 500000 bytes"):
+                self.helper["read_text"](path)
 
     def test_evidence_file_must_be_repo_relative_and_not_symlinked(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -228,50 +225,108 @@ class AutoreviewHardeningTests(unittest.TestCase):
                 os.environ.clear()
                 os.environ.update(old)
 
-    def test_large_repo_relative_evidence_file_is_truncated(self) -> None:
+    def test_large_repo_relative_evidence_file_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo = init_repo(Path(tempdir))
             evidence = repo / "evidence.txt"
             evidence.write_text("x" * 600_000, encoding="utf-8")
 
-            _, content = self.helper["validate_evidence_file"](repo, "evidence.txt", "--dataset")
+            with self.assertRaisesRegex(SystemExit, "file exceeds 500000 bytes"):
+                self.helper["validate_evidence_file"](repo, "evidence.txt", "--dataset")
 
-            self.assertIn("[truncated at 180000 characters]", content)
-
-    def test_copilot_allows_web_fetch_only_when_web_search_is_enabled(self) -> None:
-        captured: list[list[str]] = []
+    def test_codex_disables_tools_and_uses_a_neutral_directory(self) -> None:
+        captured: dict[str, object] = {}
 
         def fake_run_with_heartbeat(
             cmd: list[str],
             cwd: Path,
             **kwargs: object,
         ) -> subprocess.CompletedProcess[str]:
-            captured.append(cmd)
+            captured["cmd"] = cmd
+            captured["cwd"] = cwd
+            captured["resolve_root"] = kwargs.get("resolve_root")
+            captured["input_text"] = kwargs.get("input_text")
+            output_path = Path(cmd[cmd.index("--output-last-message") + 1])
+            output_path.write_text('{"findings":[]}', encoding="utf-8")
             return subprocess.CompletedProcess(cmd, 0, '{"findings":[]}', "")
 
-        self.helper["run_copilot"].__globals__["run_with_heartbeat"] = fake_run_with_heartbeat
-        self.helper["run_copilot"].__globals__["resolve_command"] = (
+        self.helper["run_codex"].__globals__["run_with_heartbeat"] = fake_run_with_heartbeat
+        self.helper["run_codex"].__globals__["resolve_command"] = (
             lambda command, repo: f"/resolved/{command}"
         )
         args = argparse.Namespace(
-            copilot_bin="copilot",
-            thinking=None,
+            codex_bin="codex",
+            thinking="high",
             tools=True,
-            model=None,
-            web_search=False,
+            model="gpt-5.5",
+            web_search=True,
             stream_engine_output=False,
         )
+        repo = Path("/repo")
 
-        self.helper["run_copilot"](args, Path("/repo"), "prompt")
+        self.helper["run_codex"](args, repo, "prompt")
 
-        self.assertNotIn("--allow-tool=web_fetch", captured[-1])
-        self.assertFalse(any(arg == "--allow-all-urls" for arg in captured[-1]))
+        cmd = captured["cmd"]
+        cwd = captured["cwd"]
+        assert isinstance(cmd, list)
+        assert isinstance(cwd, Path)
+        disabled = {cmd[index + 1] for index, value in enumerate(cmd) if value == "--disable"}
+        self.assertEqual(disabled, set(self.helper["CODEX_DISABLED_TOOL_FEATURES"]))
+        self.assertNotEqual(cwd, repo)
+        self.assertEqual(cmd[cmd.index("-C") + 1], str(cwd))
+        self.assertIn("--strict-config", cmd)
+        self.assertIn("--skip-git-repo-check", cmd)
+        self.assertNotIn("--search", cmd)
+        self.assertEqual(captured["resolve_root"], repo)
+        self.assertEqual(captured["input_text"], "prompt")
 
-        args.web_search = True
-        self.helper["run_copilot"](args, Path("/repo"), "prompt")
+    def test_claude_disables_tools_and_uses_a_neutral_directory(self) -> None:
+        captured: dict[str, object] = {}
 
-        self.assertIn("--allow-tool=web_fetch", captured[-1])
-        self.assertIn("--allow-all-urls", captured[-1])
+        def fake_run_with_heartbeat(
+            cmd: list[str],
+            cwd: Path,
+            **kwargs: object,
+        ) -> subprocess.CompletedProcess[str]:
+            captured["cmd"] = cmd
+            captured["cwd"] = cwd
+            captured["resolve_root"] = kwargs.get("resolve_root")
+            return subprocess.CompletedProcess(cmd, 0, '{"findings":[]}', "")
+
+        self.helper["run_claude"].__globals__["run_with_heartbeat"] = fake_run_with_heartbeat
+        self.helper["run_claude"].__globals__["resolve_command"] = (
+            lambda command, repo: f"/resolved/{command}"
+        )
+        self.helper["run_claude"].__globals__["ensure_claude_isolation_supported"] = (
+            lambda args, repo: None
+        )
+        args = argparse.Namespace(
+            claude_bin="claude",
+            fallback_model=None,
+            thinking="high",
+            tools=True,
+            model="claude-fable-5",
+            web_search=True,
+            stream_engine_output=False,
+        )
+        repo = Path("/repo")
+
+        self.helper["run_claude"](args, repo, "prompt")
+
+        cmd = captured["cmd"]
+        cwd = captured["cwd"]
+        assert isinstance(cmd, list)
+        assert isinstance(cwd, Path)
+        self.assertNotEqual(cwd, repo)
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "")
+        self.assertNotIn("--allowedTools", cmd)
+        self.assertEqual(captured["resolve_root"], repo)
+
+    def test_engines_without_no_tool_mode_fail_closed(self) -> None:
+        args = argparse.Namespace()
+        for engine in ["run_copilot", "run_opencode"]:
+            with self.assertRaisesRegex(SystemExit, "cannot enforce a no-tools read jail"):
+                self.helper[engine](args, Path("/repo"), "prompt")
 
     def test_droid_runs_without_tools_from_a_neutral_directory(self) -> None:
         captured: dict[str, object] = {}
