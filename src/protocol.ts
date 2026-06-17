@@ -183,13 +183,22 @@ export function encodeSubscribePayload(params: {
   rows: number;
 }): Uint8Array {
   assertSubscribeSize({ columns: params.columns, rows: params.rows });
+  const flags = assertUint32(params.flags, "terminal subscribe flags");
+  const snapshotMinIntervalMs = assertUint32(
+    params.snapshotMinIntervalMs ?? 0,
+    "terminal subscribe minimum snapshot interval",
+  );
+  const snapshotMaxIntervalMs = assertUint32(
+    params.snapshotMaxIntervalMs ?? 0,
+    "terminal subscribe maximum snapshot interval",
+  );
   const payload = new Uint8Array(20);
   const view = new DataView(payload.buffer);
-  view.setUint32(0, params.flags >>> 0, true);
-  view.setUint32(4, (params.snapshotMinIntervalMs ?? 0) >>> 0, true);
-  view.setUint32(8, (params.snapshotMaxIntervalMs ?? 0) >>> 0, true);
-  view.setUint32(12, params.columns >>> 0, true);
-  view.setUint32(16, params.rows >>> 0, true);
+  view.setUint32(0, flags, true);
+  view.setUint32(4, snapshotMinIntervalMs, true);
+  view.setUint32(8, snapshotMaxIntervalMs, true);
+  view.setUint32(12, params.columns, true);
+  view.setUint32(16, params.rows, true);
   return payload;
 }
 
@@ -230,9 +239,7 @@ export function decodeResizePayload(payload: Uint8Array): TerminalSize {
 }
 
 export function encodeAckPayload(bytes: number): Uint8Array {
-  if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > 0xffff_ffff) {
-    throw invalidFrame("terminal acknowledgement must be an unsigned 32-bit integer");
-  }
+  assertUint32(bytes, "terminal acknowledgement");
   const payload = new Uint8Array(4);
   new DataView(payload.buffer).setUint32(0, bytes, true);
   return payload;
@@ -271,6 +278,13 @@ export function decodeJsonPayload(payload: Uint8Array): unknown {
 
 function invalidFrame(message: string): LibterminalError {
   return new LibterminalError("invalid_frame", message);
+}
+
+function assertUint32(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
+    throw invalidFrame(`${label} must be an unsigned 32-bit integer`);
+  }
+  return value;
 }
 
 function assertSubscribeSize(size: TerminalSize): TerminalSize {

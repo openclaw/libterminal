@@ -92,6 +92,25 @@ describe("terminal protocol v2", () => {
     );
   });
 
+  it("rejects subscribe fields outside the unsigned 32-bit range", () => {
+    for (const params of [
+      { flags: -1 },
+      { flags: 1.5 },
+      { flags: Number.NaN },
+      { flags: 0x1_0000_0000 },
+      { flags: 1, snapshotMinIntervalMs: -1 },
+      { flags: 1, snapshotMaxIntervalMs: 1.5 },
+    ]) {
+      expect(() =>
+        encodeSubscribePayload({
+          columns: 80,
+          rows: 24,
+          ...params,
+        }),
+      ).toThrowError(expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_frame" }));
+    }
+  });
+
   it("rejects unsupported versions and malformed lengths", () => {
     expect(() =>
       encodeTerminalFrame({
