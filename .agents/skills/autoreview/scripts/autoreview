@@ -765,6 +765,24 @@ def require_no_secret_values(label: str, text: str) -> None:
         )
 
 
+def require_safe_diff(label: str, patch: str, paths: list[str]) -> None:
+    blocked = []
+    for rel in paths:
+        normalized = rel.replace(os.sep, "/")
+        if path_has_sensitive_part(normalized) or any(
+            pattern.search(normalized) for pattern in SENSITIVE_NAME_PATTERNS
+        ):
+            blocked.append(normalized)
+    if blocked:
+        details = "\n".join(f"- {item}" for item in blocked[:20])
+        more = f"\n... {len(blocked) - 20} more" if len(blocked) > 20 else ""
+        raise SystemExit(
+            "refusing to include sensitive tracked files in review bundle; "
+            f"clean, remove, or redact them before running autoreview:\n{details}{more}"
+        )
+    require_no_secret_values(label, patch)
+
+
 def file_bundle_risk(
     repo: Path,
     path: Path,
@@ -830,6 +848,16 @@ def local_status(repo: Path, untracked: list[str]) -> str:
 def local_bundle(repo: Path) -> str:
     staged_patch = git(repo, "diff", *SAFE_DIFF_FLAGS, "--cached", "--patch")
     unstaged_patch = git(repo, "diff", *SAFE_DIFF_FLAGS, "--patch")
+    require_safe_diff(
+        "staged diff",
+        staged_patch,
+        git_path_list(repo, "diff", *SAFE_DIFF_FLAGS, "--name-only", "--cached", "-z"),
+    )
+    require_safe_diff(
+        "unstaged diff",
+        unstaged_patch,
+        git_path_list(repo, "diff", *SAFE_DIFF_FLAGS, "--name-only", "-z"),
+    )
     untracked = safe_untracked_files(repo)
     if not staged_patch.strip() and not unstaged_patch.strip() and not untracked:
         raise SystemExit("no local changes to review")
@@ -861,6 +889,19 @@ def branch_bundle(repo: Path, base_ref: str) -> str:
         "--end-of-options",
         f"{base_ref}...HEAD",
     )
+    require_safe_diff(
+        "branch diff",
+        branch_patch,
+        git_path_list(
+            repo,
+            "diff",
+            *SAFE_DIFF_FLAGS,
+            "--name-only",
+            "-z",
+            "--end-of-options",
+            f"{base_ref}...HEAD",
+        ),
+    )
     return "\n\n".join(
         [
             "# Branch Diff",
@@ -888,6 +929,20 @@ def commit_bundle(repo: Path, commit_ref: str) -> str:
         "--format=fuller",
         "--end-of-options",
         commit_ref,
+    )
+    require_safe_diff(
+        "commit diff",
+        commit_patch,
+        git_path_list(
+            repo,
+            "show",
+            *SAFE_DIFF_FLAGS,
+            "--name-only",
+            "--format=",
+            "-z",
+            "--end-of-options",
+            commit_ref,
+        ),
     )
     return "\n\n".join(
         [

@@ -69,6 +69,19 @@ class AutoreviewHardeningTests(unittest.TestCase):
 
             self.assertIn("## image.bin\n[binary file omitted]", bundle)
 
+    def test_local_bundle_blocks_secret_like_staged_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo = init_repo(Path(tempdir))
+            path = repo / "tracked.txt"
+            path.write_text("safe\n", encoding="utf-8")
+            git(repo, "add", "tracked.txt")
+            git(repo, "commit", "-q", "-m", "base")
+            path.write_text("api_key=" + "x" * 24 + "\n", encoding="utf-8")
+            git(repo, "add", "tracked.txt")
+
+            with self.assertRaisesRegex(SystemExit, "secret-like content"):
+                self.helper["local_bundle"](repo)
+
     def test_branch_bundle_rejects_unsafe_or_unknown_base_before_diff(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo = init_repo(Path(tempdir))
@@ -80,6 +93,29 @@ class AutoreviewHardeningTests(unittest.TestCase):
                 self.helper["branch_bundle"](repo, "--help")
             with self.assertRaisesRegex(SystemExit, "unknown base ref"):
                 self.helper["branch_bundle"](repo, "origin/main")
+
+    def test_branch_bundle_blocks_sensitive_tracked_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo = init_repo(Path(tempdir))
+            (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+            git(repo, "add", "tracked.txt")
+            git(repo, "commit", "-q", "-m", "base")
+            (repo / ".env").write_text("placeholder=true\n", encoding="utf-8")
+            git(repo, "add", ".env")
+            git(repo, "commit", "-q", "-m", "sensitive")
+
+            with self.assertRaisesRegex(SystemExit, "sensitive tracked files"):
+                self.helper["branch_bundle"](repo, "HEAD~1")
+
+    def test_commit_bundle_blocks_secret_like_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo = init_repo(Path(tempdir))
+            (repo / "tracked.txt").write_text("token=" + "x" * 24 + "\n", encoding="utf-8")
+            git(repo, "add", "tracked.txt")
+            git(repo, "commit", "-q", "-m", "secret")
+
+            with self.assertRaisesRegex(SystemExit, "secret-like content"):
+                self.helper["commit_bundle"](repo, "HEAD")
 
     def test_git_path_list_preserves_newline_filenames(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
