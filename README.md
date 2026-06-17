@@ -11,6 +11,18 @@ import { decodeTerminalFrame } from "@openclaw/libterminal/protocol";
 The package deliberately does not own authentication, public listeners,
 terminal transcripts, or product-specific room/session state.
 
+## Install
+
+```sh
+pnpm add @openclaw/libterminal
+```
+
+Install `node-pty` in applications that use the Node.js PTY adapter:
+
+```sh
+pnpm add node-pty
+```
+
 ## Exports
 
 - `@openclaw/libterminal`: universal terminal types and errors
@@ -21,11 +33,84 @@ terminal transcripts, or product-specific room/session state.
 - `@openclaw/libterminal/worker`: Worker-compatible WebSocket bridging
 - `@openclaw/libterminal/testing`: deterministic terminal test doubles
 
+## Browser
+
+Ghostty terminals default to read-only. The application owns authorization,
+the byte source, and the WASM asset route.
+
+```ts
+import { createGhosttyTerminal } from "@openclaw/libterminal/browser";
+
+const terminal = await createGhosttyTerminal({
+  parent: document.querySelector("#terminal")!,
+  runtimeOptions: { wasmUrl: "/vendor/ghostty-vt.wasm" },
+  signal: controller.signal,
+});
+
+await terminal.attach(output);
+```
+
+Use `readGhosttyAsset()` from the Node.js export to serve the pinned
+`ghostty-web` module, WASM, and browser-external shim under `/vendor`.
+
+## Node.js
+
+The built-in adapter dynamically imports the optional `node-pty` peer. Inject a
+compatible driver in tests or applications that own their PTY runtime.
+
+```ts
+import { attachLocalStdio, spawnLocalPty } from "@openclaw/libterminal/node";
+
+const terminal = await spawnLocalPty({
+  command: "codex",
+  args: ["--yolo"],
+  cwd: process.cwd(),
+});
+
+await attachLocalStdio(terminal);
+```
+
+PTY output queues are bounded by default. Raw stdin mode is restored when the
+session ends, errors, or aborts.
+
+## Workers
+
+The Worker bridge forwards both directions in order and can revalidate control
+before every left-to-right message and on a periodic fail-closed timer.
+
+```ts
+import { bridgeWebSockets } from "@openclaw/libterminal/worker";
+
+const bridge = bridgeWebSockets(viewer, terminal, {
+  canSendLeft: async () => capabilities.canControl(sessionId),
+});
+
+await bridge.completed;
+```
+
+The product remains responsible for authenticating both sockets and deciding
+which capabilities grant control.
+
+## Protocol
+
+`@openclaw/libterminal/protocol` owns terminal protocol v2 codecs and golden
+vectors. Strict decoders throw `LibterminalError`; `tryDecodeTerminalFrame()`
+is available for nullable migration paths.
+
+Wire-protocol versions and npm package versions are independent compatibility
+surfaces.
+
+## Safety
+
+- Terminal bytes are never logged or persisted by the package.
+- Browser terminals default to read-only.
+- Replay, subscriber, and PTY output buffers are bounded.
+- Protocol frames and terminal dimensions are validated.
+- Authorization, public listeners, storage, and transcripts stay in consumers.
+
 ## Development
 
 ```sh
 pnpm install
 pnpm check
 ```
-
-Shared TypeScript terminal protocol, streaming, browser, Node, and Worker primitives.
