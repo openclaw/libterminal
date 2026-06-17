@@ -41,3 +41,5 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 - Restore local stdio state when the initial terminal resize fails.
 - Propagate initial and later asynchronous terminal resize failures through
   stdio cleanup.
+- Align the declared Node.js engine range with the engine-strict locked
+  toolchain.
