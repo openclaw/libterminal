@@ -72,4 +72,3 @@ terminal output.
 
 Maintainers publish from a `vX.Y.Z` tag on `main` through the trusted-publishing
 workflow. Do not publish from a local machine or add an npm automation token.
-

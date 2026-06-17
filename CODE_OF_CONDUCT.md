@@ -30,4 +30,3 @@ remove, edit, reject, or ban contributions or participants when necessary.
 This policy is adapted from the
 [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html),
 version 2.1.
-

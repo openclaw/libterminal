@@ -14,4 +14,3 @@
 - [ ] Browser, Node.js, and Worker impact considered
 - [ ] `CHANGELOG.md` updated when user-visible or compatibility-relevant
 - [ ] No credentials, private paths, private hosts, or sensitive logs included
-

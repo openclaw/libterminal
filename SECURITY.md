@@ -43,4 +43,3 @@ boundary.
 - Pin and review dependency updates before publishing.
 
 There is currently no paid bug bounty program.
-
