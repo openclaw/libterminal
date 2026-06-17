@@ -46,6 +46,40 @@ ENGINE_GIT_CONFIG_OVERRIDES = (
     ("pager.log", "cat"),
     ("pager.show", "cat"),
 )
+SENSITIVE_ENGINE_ENV_EXACT = {
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "AZURE_CONFIG_DIR",
+    "CLOUDSDK_CONFIG",
+    "DOCKER_CONFIG",
+    "GH_CONFIG_DIR",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "KUBECONFIG",
+    "NETRC",
+    "NPM_CONFIG_USERCONFIG",
+    "SSH_ASKPASS",
+}
+SENSITIVE_ENGINE_ENV_TOKENS = {
+    "AUTH",
+    "CREDENTIAL",
+    "CREDENTIALS",
+    "JWT",
+    "PASS",
+    "PASSPHRASE",
+    "PASSWD",
+    "PASSWORD",
+    "SECRET",
+    "TOKEN",
+}
+SENSITIVE_ENGINE_ENV_COMPACT_MARKERS = {
+    "ACCESSKEY",
+    "ACCESSTOKEN",
+    "APIKEY",
+    "AUTHTOKEN",
+    "CLIENTSECRET",
+    "PRIVATEKEY",
+    "REFRESHTOKEN",
+    "SESSIONTOKEN",
+}
 SENSITIVE_PATH_PARTS = {
     ".aws",
     ".azure",
@@ -252,7 +286,9 @@ def safe_engine_env(
     env = {
         key: value
         for key, value in os.environ.items()
-        if key not in blocked_exact and not any(key.startswith(prefix) for prefix in blocked_prefixes)
+        if key not in blocked_exact
+        and not any(key.startswith(prefix) for prefix in blocked_prefixes)
+        and not is_sensitive_engine_env_name(key)
     }
     env["PATH"] = safe_engine_path(repo, extra_paths)
     env["GIT_CONFIG_COUNT"] = str(len(ENGINE_GIT_CONFIG_OVERRIDES))
@@ -261,6 +297,17 @@ def safe_engine_env(
         env[f"GIT_CONFIG_VALUE_{index}"] = value
     env.update(extra or {})
     return env
+
+
+def is_sensitive_engine_env_name(name: str) -> bool:
+    normalized = re.sub(r"[^A-Z0-9]+", "_", name.upper()).strip("_")
+    if normalized in SENSITIVE_ENGINE_ENV_EXACT:
+        return True
+    tokens = set(normalized.split("_"))
+    if tokens & SENSITIVE_ENGINE_ENV_TOKENS:
+        return True
+    compact = normalized.replace("_", "")
+    return any(marker in compact for marker in SENSITIVE_ENGINE_ENV_COMPACT_MARKERS)
 
 
 def parse_ps_time(value: str) -> float:

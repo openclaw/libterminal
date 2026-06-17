@@ -195,6 +195,39 @@ class AutoreviewHardeningTests(unittest.TestCase):
 
             self.assertNotIn(str(repo.resolve()), env["PATH"].split(os.pathsep))
 
+    def test_safe_engine_env_strips_ambient_credentials(self) -> None:
+        old = os.environ.copy()
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo = init_repo(Path(tempdir))
+            try:
+                os.environ.update(
+                    {
+                        "AWS_SHARED_CREDENTIALS_FILE": "/tmp/credentials",
+                        "GH_TOKEN": "placeholder",
+                        "NPM_CONFIG_USERCONFIG": "/tmp/npmrc",
+                        "OPENAI_API_KEY": "placeholder",
+                        "SSH_AUTH_SOCK": "/tmp/agent.sock",
+                        "SUPERMEMORY_CC_API_KEY": "placeholder",
+                        "AUTOREVIEW_SAFE_SETTING": "kept",
+                    }
+                )
+
+                env = self.helper["safe_engine_env"](repo)
+
+                for key in [
+                    "AWS_SHARED_CREDENTIALS_FILE",
+                    "GH_TOKEN",
+                    "NPM_CONFIG_USERCONFIG",
+                    "OPENAI_API_KEY",
+                    "SSH_AUTH_SOCK",
+                    "SUPERMEMORY_CC_API_KEY",
+                ]:
+                    self.assertNotIn(key, env)
+                self.assertEqual(env["AUTOREVIEW_SAFE_SETTING"], "kept")
+            finally:
+                os.environ.clear()
+                os.environ.update(old)
+
     def test_large_repo_relative_evidence_file_is_truncated(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo = init_repo(Path(tempdir))
