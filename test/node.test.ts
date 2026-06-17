@@ -77,6 +77,40 @@ describe("attachLocalStdio", () => {
     );
     expect(reasons).toEqual(["aborted"]);
   });
+
+  it("stops waiting for idle output and cleans up on a later abort", async () => {
+    const controller = new AbortController();
+    const reasons: Array<string | undefined> = [];
+    const removed: string[] = [];
+    const stdin = {
+      isTTY: false,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdin:${event}`),
+    } as unknown as NodeJS.ReadStream;
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdout:${event}`),
+      write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
+        callback();
+        return true;
+      },
+    } as unknown as NodeJS.WriteStream;
+    const attached = attachLocalStdio(
+      {
+        output: neverOutput(),
+        close: async (reason) => {
+          reasons.push(reason);
+        },
+      },
+      { signal: controller.signal, stdin, stdout },
+    );
+    controller.abort();
+    await attached;
+    expect(reasons).toEqual(["aborted"]);
+    expect(removed).toEqual(["stdin:data", "stdout:resize"]);
+  });
 });
 
 describe("readGhosttyAsset", () => {
@@ -120,4 +154,12 @@ class FakePtyDriver implements PtyDriver {
   emitExit(exitCode: number, signal: number): void {
     this.exitListener({ exitCode, signal });
   }
+}
+
+function neverOutput(): AsyncIterable<Uint8Array> {
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
+    }),
+  };
 }

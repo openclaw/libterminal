@@ -146,6 +146,8 @@ export async function attachLocalStdio(
   }
   const stdin = options?.stdin ?? process.stdin;
   const stdout = options?.stdout ?? process.stdout;
+  const output = terminal.output[Symbol.asyncIterator]();
+  const aborted = abortPromise(options?.signal);
   const previousRaw = stdin.isTTY ? stdin.isRaw : false;
   const writeInput = (data: Buffer | string) => {
     const bytes = typeof data === "string" ? textEncoder.encode(data) : data;
@@ -169,13 +171,20 @@ export async function attachLocalStdio(
   resize();
 
   try {
-    for await (const bytes of terminal.output) {
-      if (options?.signal?.aborted) {
+    for (;;) {
+      const next = aborted
+        ? await Promise.race([output.next(), aborted.promise])
+        : await output.next();
+      if (next === abortedResult || next.done) {
         break;
       }
-      await writeToStream(stdout, bytes);
+      await writeToStream(stdout, next.value);
     }
   } finally {
+    aborted?.dispose();
+    if (options?.signal?.aborted) {
+      void output.return?.();
+    }
     stdin.off("data", writeInput);
     stdout.off("resize", resize);
     options?.signal?.removeEventListener("abort", abort);
@@ -343,3 +352,25 @@ function throwIfAborted(signal?: AbortSignal): void {
     throw signal.reason ?? new Error("The operation was aborted");
   }
 }
+
+const abortedResult = Symbol("aborted");
+
+function abortPromise(
+  signal?: AbortSignal,
+): { promise: Promise<typeof abortedResult>; dispose(): void } | undefined {
+  if (!signal) {
+    return undefined;
+  }
+  if (signal.aborted) {
+    return { promise: Promise.resolve(abortedResult), dispose: () => undefined };
+  }
+  let resolveAbort: (value: typeof abortedResult) => void = noop;
+  const promise = new Promise<typeof abortedResult>((resolve) => {
+    resolveAbort = resolve;
+  });
+  const abort = () => resolveAbort(abortedResult);
+  signal.addEventListener("abort", abort, { once: true });
+  return { promise, dispose: () => signal.removeEventListener("abort", abort) };
+}
+
+function noop(): void {}
