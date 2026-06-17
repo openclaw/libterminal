@@ -179,7 +179,7 @@ export function encodeSubscribePayload(params: {
   columns: number;
   rows: number;
 }): Uint8Array {
-  assertTerminalSize({ columns: params.columns, rows: params.rows });
+  assertSubscribeSize({ columns: params.columns, rows: params.rows });
   const payload = new Uint8Array(20);
   const view = new DataView(payload.buffer);
   view.setUint32(0, params.flags >>> 0, true);
@@ -202,7 +202,7 @@ export function decodeSubscribePayload(payload: Uint8Array): TerminalSubscribe {
     columns: view.getUint32(12, true),
     rows: view.getUint32(16, true),
   };
-  assertTerminalSize(decoded);
+  assertSubscribeSize(decoded);
   return decoded;
 }
 
@@ -257,6 +257,13 @@ export function decodeJsonPayload(payload: Uint8Array): unknown {
 
 function invalidFrame(message: string): LibterminalError {
   return new LibterminalError("invalid_frame", message);
+}
+
+function assertSubscribeSize(size: TerminalSize): TerminalSize {
+  if (size.columns === 0 && size.rows === 0) {
+    return size;
+  }
+  return assertTerminalSize(size);
 }
 
 function isTerminalMessageType(value: number): value is TerminalMessageType {

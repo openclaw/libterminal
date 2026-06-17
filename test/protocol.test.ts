@@ -65,6 +65,32 @@ describe("terminal protocol v2", () => {
     expect(decodeAckPayload(fromHex(vectors.ack))).toBe(65_535);
   });
 
+  it("allows default subscribe dimensions without relaxing resize validation", () => {
+    const defaults = encodeSubscribePayload({
+      flags: 1,
+      columns: 0,
+      rows: 0,
+    });
+    expect(decodeSubscribePayload(defaults)).toEqual({
+      flags: 1,
+      snapshotMinIntervalMs: 0,
+      snapshotMaxIntervalMs: 0,
+      columns: 0,
+      rows: 0,
+    });
+    expect(() => encodeSubscribePayload({ flags: 1, columns: 0, rows: 24 })).toThrowError(
+      expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_terminal_size" }),
+    );
+    const mixed = defaults.slice();
+    new DataView(mixed.buffer).setUint32(16, 24, true);
+    expect(() => decodeSubscribePayload(mixed)).toThrowError(
+      expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_terminal_size" }),
+    );
+    expect(() => encodeResizePayload({ columns: 0, rows: 0 })).toThrowError(
+      expect.objectContaining<Partial<LibterminalError>>({ code: "invalid_terminal_size" }),
+    );
+  });
+
   it("rejects unsupported versions and malformed lengths", () => {
     const unsupported = fromHex(vectors.pingFrame);
     unsupported[2] = 99;
