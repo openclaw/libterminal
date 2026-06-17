@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 24
+  PNPM_VERSION: 10.33.2
+
+jobs:
+  publish:
+    name: Publish @openclaw/libterminal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate package metadata
+        run: |
+          node <<'NODE'
+          const { readFileSync } = require("node:fs");
+
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const expectedName = "@openclaw/libterminal";
+          const expectedAuthor = "OpenClaw Team <dev@openclaw.ai>";
+          const expectedRepo = "https://github.com/openclaw/libterminal";
+          const repository = typeof pkg.repository === "string"
+            ? pkg.repository
+            : pkg.repository?.url;
+          const normalize = (value) =>
+            String(value ?? "")
+              .trim()
+              .replace(/^git\+/, "")
+              .replace(/\.git$/i, "")
+              .replace(/\/+$/, "");
+
+          const errors = [];
+          if (pkg.name !== expectedName) {
+            errors.push(`package name must be ${expectedName}; found ${pkg.name ?? "<missing>"}`);
+          }
+          if (pkg.author !== expectedAuthor) {
+            errors.push(`package author must be ${expectedAuthor}; found ${pkg.author ?? "<missing>"}`);
+          }
+          if (normalize(repository) !== expectedRepo) {
+            errors.push(`repository URL must be ${expectedRepo}; found ${normalize(repository) || "<missing>"}`);
+          }
+          if (pkg.private === true) {
+            errors.push("package must not be private");
+          }
+          if (errors.length > 0) {
+            for (const error of errors) console.error(error);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Validate release tag
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main --depth=1
+
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const { readFileSync } = require("node:fs");
+
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const releaseTag = process.env.RELEASE_TAG ?? "";
+          const releaseSha = process.env.RELEASE_SHA ?? "";
+          const expectedTag = `v${pkg.version}`;
+
+          if (!/^v\d+\.\d+\.\d+$/.test(releaseTag)) {
+            throw new Error(`release tag must match vX.Y.Z; received ${releaseTag || "<missing>"}`);
+          }
+          if (releaseTag !== expectedTag) {
+            throw new Error(`release tag ${releaseTag} does not match package version ${pkg.version}`);
+          }
+          execFileSync("git", ["merge-base", "--is-ancestor", releaseSha, "origin/main"]);
+          NODE
+
+      - name: Ensure version is unpublished
+        run: |
+          set -euo pipefail
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${package_version} is already published."
+            exit 1
+          fi
+
+      - name: Check
+        run: pnpm check
+
+      - name: Publish with npm trusted publishing
+        run: npm publish --access public --provenance

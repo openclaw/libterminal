@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a reproducible defect or regression.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report one issue at a time. Redact credentials, private paths, hostnames, and sensitive terminal output.
+        Report security issues through the private security advisory link instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the observed defect in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the shortest deterministic reproduction.
+      placeholder: |
+        1. Install @openclaw/libterminal@...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version or commit
+      placeholder: "@openclaw/libterminal@0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Node.js
+        - Browser
+        - Worker
+        - Multiple runtimes
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Runtime version, browser or Worker platform, and operating system.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or protocol evidence
+      description: Include only the evidence needed to reproduce and diagnose the issue.
+      render: shell
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Explain severity, frequency, and affected users or systems.
+    validations:
+      required: true
