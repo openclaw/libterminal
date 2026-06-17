@@ -15,6 +15,10 @@ function acceptsNativeWebSocket(socket: WebSocket): void {
 }
 void acceptsNativeWebSocket;
 
+function redactTestToken(reason: string): string {
+  return reason.replace(/token=[^ ]+/g, "token=[redacted]");
+}
+
 describe("bridgeWebSockets", () => {
   it("forwards duplex messages in order", async () => {
     const left = new FakeWebSocket();
@@ -82,6 +86,44 @@ describe("bridgeWebSockets", () => {
     left.emitClose(1006, "é".repeat(100));
     expect(right.closed?.code).toBe(1000);
     expect(new TextEncoder().encode(right.closed?.reason).byteLength).toBeLessThanOrEqual(123);
+  });
+
+  it("applies product close-reason sanitization to peer and explicit closes", () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    bridgeWebSockets(left, right, {
+      controlCheckIntervalMs: 0,
+      sanitizeCloseReason: redactTestToken,
+    });
+    left.emitClose(1000, "upstream token=secret");
+    expect(right.closed).toEqual({ code: 1000, reason: "upstream token=[redacted]" });
+
+    const nextLeft = new FakeWebSocket();
+    const nextRight = new FakeWebSocket();
+    const bridge = bridgeWebSockets(nextLeft, nextRight, {
+      controlCheckIntervalMs: 0,
+      sanitizeCloseReason: redactTestToken,
+    });
+    bridge.close(1000, "operator token=secret");
+    expect(nextLeft.closed).toEqual({ code: 1000, reason: "operator token=[redacted]" });
+    expect(nextRight.closed).toEqual({ code: 1000, reason: "operator token=[redacted]" });
+  });
+
+  it("fails safely when product close-reason sanitization throws", () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    const errors: unknown[] = [];
+    const bridge = bridgeWebSockets(left, right, {
+      controlCheckIntervalMs: 0,
+      sanitizeCloseReason: () => {
+        throw new Error("sanitizer failed");
+      },
+      onError: (error) => errors.push(error),
+    });
+    bridge.close(1000, "token=secret");
+    expect(left.closed).toEqual({ code: 1000, reason: "" });
+    expect(right.closed).toEqual({ code: 1000, reason: "" });
+    expect(errors).toHaveLength(1);
   });
 });
 

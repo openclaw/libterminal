@@ -33,6 +33,7 @@ export type WebSocketBridgeOptions = {
   controlCheckIntervalMs?: number;
   forwardRightOutputAcknowledgements?: boolean;
   acknowledgeRightOutputImmediately?: boolean;
+  sanitizeCloseReason?: (reason: string) => string;
   onError?: (error: unknown) => void;
 };
 
@@ -50,7 +51,7 @@ export function bridgeWebSockets(
   right: WebSocketLike,
   options: WebSocketBridgeOptions = {},
 ): WebSocketBridge {
-  const deniedReason = cleanReason(options.deniedReason ?? "terminal control revoked");
+  const deniedReason = options.deniedReason ?? "terminal control revoked";
   const controlCheckIntervalMs = options.controlCheckIntervalMs ?? 5000;
   let leftInputQueue = Promise.resolve();
   let rightOutputQueue = Promise.resolve();
@@ -63,6 +64,22 @@ export function bridgeWebSockets(
   const completed = new Promise<void>((resolve) => {
     resolveCompleted = resolve;
   });
+  const reportError = (error: unknown) => {
+    try {
+      options.onError?.(error);
+    } catch {
+      // Error reporting must not interrupt bridge teardown.
+    }
+  };
+  const sanitizeReason = (value: unknown) => {
+    const source = typeof value === "string" ? value : "";
+    try {
+      return cleanReason(options.sanitizeCloseReason?.(source) ?? source);
+    } catch (error) {
+      reportError(error);
+      return "";
+    }
+  };
 
   const stop = () => {
     if (stopped) {
@@ -83,12 +100,12 @@ export function bridgeWebSockets(
   };
 
   const close = (code = 1000, reason = "bridge closed") => {
-    closePair(left, right, code, cleanReason(reason));
+    closePair(left, right, code, sanitizeReason(reason));
     stop();
   };
 
   const fail = (error: unknown) => {
-    options.onError?.(error);
+    reportError(error);
     close(1011, "terminal bridge error");
   };
 
@@ -100,7 +117,7 @@ export function bridgeWebSockets(
     try {
       canSend = await options.canSendLeft();
     } catch (error) {
-      options.onError?.(error);
+      reportError(error);
     }
     leftCanSend = canSend;
     if (!canSend) {
@@ -168,12 +185,12 @@ export function bridgeWebSockets(
   }
 
   function onLeftClose(event: WebSocketCloseEventLike): void {
-    closePeer(event, right);
+    closePeer(event, right, sanitizeReason);
     stop();
   }
 
   function onRightClose(event: WebSocketCloseEventLike): void {
-    closePeer(event, left);
+    closePeer(event, left, sanitizeReason);
     stop();
   }
 
@@ -270,9 +287,13 @@ function pairIsOpen(left: WebSocketLike, right: WebSocketLike): boolean {
   return left.readyState === WEB_SOCKET_OPEN && right.readyState === WEB_SOCKET_OPEN;
 }
 
-function closePeer(event: WebSocketCloseEventLike, peer: WebSocketLike): void {
+function closePeer(
+  event: WebSocketCloseEventLike,
+  peer: WebSocketLike,
+  sanitizeReason: (value: unknown) => string,
+): void {
   if (canClose(peer)) {
-    safeClose(peer, event.code || 1000, event.reason || "peer closed");
+    safeClose(peer, event.code || 1000, sanitizeReason(event.reason || "peer closed"));
   }
 }
 
