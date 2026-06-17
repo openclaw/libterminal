@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["unicorn", "typescript", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "perf": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "curly": "error",
+    "eslint/no-var": "error",
+    "import/no-absolute-path": "error",
+    "import/no-self-import": "error",
+    "node/no-exports-assign": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/prefer-ts-expect-error": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/throw-new-error": "error"
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "pnpm-lock.yaml", "*.tgz"],
+  "overrides": [
+    {
+      "files": ["test/**/*.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ]
+}

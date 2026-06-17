@@ -1,0 +1,105 @@
+{
+  "name": "@openclaw/libterminal",
+  "version": "0.1.0",
+  "description": "Shared TypeScript terminal protocol, streaming, browser, Node, and Worker primitives",
+  "keywords": [
+    "ghostty",
+    "openclaw",
+    "pty",
+    "terminal",
+    "typescript",
+    "websocket"
+  ],
+  "homepage": "https://github.com/openclaw/libterminal#readme",
+  "bugs": {
+    "url": "https://github.com/openclaw/libterminal/issues"
+  },
+  "license": "MIT",
+  "author": "OpenClaw Team <dev@openclaw.ai>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openclaw/libterminal.git"
+  },
+  "files": [
+    "dist",
+    "protocol",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./stream": {
+      "types": "./dist/stream.d.ts",
+      "import": "./dist/stream.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./protocol/terminal-v2.json": "./protocol/terminal-v2.json",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts src/protocol.ts src/stream.ts src/browser.ts src/node.ts src/worker.ts src/testing.ts --format esm --dts --clean --target es2023 --no-fixedExtension --external ghostty-web --external node-pty",
+    "check": "pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build && pnpm run pack:check",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware --deny-warnings src test",
+    "pack:check": "node scripts/check-pack.mjs",
+    "prepack": "pnpm run build",
+    "test": "vitest run",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "ghostty-web": "0.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "@typescript/native-preview": "7.0.0-dev.20260613.1",
+    "node-pty": "^1.1.0",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.0"
+  },
+  "peerDependencies": {
+    "node-pty": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-pty": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@10.33.2"
+}
