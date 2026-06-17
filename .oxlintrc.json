@@ -21,7 +21,7 @@
   "ignorePatterns": ["dist/", "node_modules/", "pnpm-lock.yaml", "*.tgz"],
   "overrides": [
     {
-      "files": ["test/**/*.ts"],
+      "files": ["test/**/*.ts", "src/testing.ts"],
       "rules": {
         "typescript/no-explicit-any": "off",
         "typescript/no-unsafe-type-assertion": "off"
