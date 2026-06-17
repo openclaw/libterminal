@@ -56,6 +56,26 @@ describe("spawnLocalPty", () => {
     await session.write?.(euro.subarray(2));
     expect(fake.writes).toEqual(["€"]);
   });
+
+  it("flushes partial UTF-8 input once before closing the PTY", async () => {
+    const fake = new FakePtyDriver();
+    const session = await spawnLocalPty({
+      command: "codex",
+      cwd: "/workspace",
+      driver: fake,
+    });
+    const euro = new TextEncoder().encode("€");
+
+    await session.write?.(euro.subarray(0, 2));
+    await session.close();
+    session.kill("SIGTERM");
+
+    expect(fake.writes).toEqual(["�"]);
+    expect(fake.kills).toEqual([undefined, "SIGTERM"]);
+    await expect(session.write?.(euro.subarray(2))).rejects.toMatchObject({
+      code: "transport_closed",
+    });
+  });
 });
 
 describe("attachLocalStdio", () => {

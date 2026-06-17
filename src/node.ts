@@ -105,6 +105,24 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
     cwd: options.cwd,
     env: options.env ?? currentEnvironment(),
   });
+  let inputClosed = false;
+  const flushInput = () => {
+    if (inputClosed) {
+      return;
+    }
+    inputClosed = true;
+    const decoded = inputDecoder.decode();
+    if (decoded) {
+      terminal.write(decoded);
+    }
+  };
+  const kill = (signal?: string) => {
+    try {
+      flushInput();
+    } finally {
+      terminal.kill(signal);
+    }
+  };
   const output = new AsyncByteQueue(options.outputBufferBytes, options.onOutputDrop);
   const dataSubscription = terminal.onData((data) => {
     const bytes = textEncoder.encode(data);
@@ -116,11 +134,12 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
     exitSubscription = terminal.onExit(({ exitCode, signal }) => {
       dataSubscription.dispose();
       exitSubscription.dispose();
+      inputClosed = true;
       output.close();
       resolve({ code: exitCode, signal: signal ?? null });
     });
   });
-  const abort = () => terminal.kill();
+  const abort = () => kill();
   options.signal?.addEventListener("abort", abort, { once: true });
   void exit.finally(() => options.signal?.removeEventListener("abort", abort));
 
@@ -128,6 +147,9 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
     output,
     exit,
     write: async (bytes) => {
+      if (inputClosed) {
+        throw new LibterminalError("transport_closed", "PTY input is closed");
+      }
       const decoded = inputDecoder.decode(bytes, { stream: true });
       if (decoded) {
         terminal.write(decoded);
@@ -137,8 +159,8 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
       assertTerminalSize(nextSize);
       terminal.resize(nextSize.columns, nextSize.rows);
     },
-    close: async () => terminal.kill(),
-    kill: (signal?: string) => terminal.kill(signal),
+    close: async () => kill(),
+    kill,
   };
 }
 
