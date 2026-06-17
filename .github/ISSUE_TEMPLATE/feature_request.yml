@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a new capability or public API change.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What concrete problem cannot be solved with the current API?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: Describe the desired contract, including runtime and protocol behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Explain existing workarounds and why they are insufficient.
+  - type: checkboxes
+    id: surfaces
+    attributes:
+      label: Affected surfaces
+      options:
+        - label: Protocol or wire format
+        - label: Exported TypeScript API
+        - label: Node.js runtime
+        - label: Browser runtime
+        - label: Worker runtime
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Note ordering, cancellation, streaming, migration, or breaking-change concerns.
+    validations:
+      required: true
