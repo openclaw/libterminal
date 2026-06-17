@@ -35,6 +35,39 @@ describe("bridgeWebSockets", () => {
     await bridge.completed;
   });
 
+  it("waits for queued message normalization before completing", async () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    const bridge = bridgeWebSockets(left, right, { controlCheckIntervalMs: 0 });
+    let resolvePayload: (value: ArrayBuffer) => void = noop;
+    let markStarted: () => void = noop;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const payload = new Promise<ArrayBuffer>((resolve) => {
+      resolvePayload = resolve;
+    });
+    let completed = false;
+    void bridge.completed.then(() => {
+      completed = true;
+    });
+
+    right.emitMessage({
+      arrayBuffer: () => {
+        markStarted();
+        return payload;
+      },
+    });
+    await started;
+    bridge.close();
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    resolvePayload(Uint8Array.from([1, 2, 3]).buffer);
+    await bridge.completed;
+    expect(completed).toBe(true);
+  });
+
   it("fails closed when terminal control is revoked", async () => {
     const left = new FakeWebSocket();
     const right = new FakeWebSocket();
@@ -203,3 +236,5 @@ class FakeWebSocket implements WebSocketLike {
     }
   }
 }
+
+function noop(): void {}

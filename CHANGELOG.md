@@ -43,5 +43,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
   stdio cleanup.
 - Flush buffered PTY input decoder state exactly once before local session
   teardown.
+- Wait for queued WebSocket bridge forwarding to settle before reporting bridge
+  completion.
 - Align the declared Node.js engine range with the engine-strict locked
   toolchain.

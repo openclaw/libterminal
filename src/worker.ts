@@ -96,7 +96,7 @@ export function bridgeWebSockets(
     right.removeEventListener("close", onRightClose);
     left.removeEventListener("error", onLeftError);
     right.removeEventListener("error", onRightError);
-    resolveCompleted();
+    void Promise.allSettled([leftInputQueue, rightOutputQueue]).then(() => resolveCompleted());
   };
 
   const close = (code = 1000, reason = "bridge closed") => {
