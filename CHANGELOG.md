@@ -13,9 +13,13 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
   asset serving for Node.js.
 - Add ordered Worker-compatible WebSocket bridging with fail-closed control
   revalidation and acknowledgement accounting.
+- Add product-supplied WebSocket close-reason sanitization.
+- Export canonical Ghostty asset paths for Node.js consumers.
 - Add reusable terminal, WebSocket, byte, and clock test doubles.
 
 ### Fixed
 
+- Allow subscribe payloads to request service-selected dimensions with zero
+  columns and rows while keeping resize validation strict.
 - Always restore local stdio listeners and raw mode when terminal output
   iteration or iterator cleanup fails.

@@ -50,8 +50,9 @@ const terminal = await createGhosttyTerminal({
 await terminal.attach(output);
 ```
 
-Use `readGhosttyAsset()` from the Node.js export to serve the pinned
-`ghostty-web` module, WASM, and browser-external shim under `/vendor`.
+Use `GHOSTTY_ASSET_PATHS` and `readGhosttyAsset()` from the Node.js export to
+serve the pinned `ghostty-web` module, WASM, and browser-external shim under
+their canonical `/vendor` routes.
 
 ## Node.js
 
@@ -83,6 +84,7 @@ import { bridgeWebSockets } from "@openclaw/libterminal/worker";
 
 const bridge = bridgeWebSockets(viewer, terminal, {
   canSendLeft: async () => capabilities.canControl(sessionId),
+  sanitizeCloseReason: redactCredentials,
 });
 
 await bridge.completed;
@@ -96,6 +98,10 @@ which capabilities grant control.
 `@openclaw/libterminal/protocol` owns terminal protocol v2 codecs and golden
 vectors. Strict decoders throw `LibterminalError`; `tryDecodeTerminalFrame()`
 is available for nullable migration paths.
+
+Subscribe payloads may use zero columns and rows together to ask the terminal
+service to select default dimensions. Resize payloads always require real
+dimensions.
 
 Wire-protocol versions and npm package versions are independent compatibility
 surfaces.
