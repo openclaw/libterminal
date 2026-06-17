@@ -18,4 +18,3 @@ coverage/
 
 .agents/skills/**/__pycache__/
 .agents/skills/**/*.py[cod]
-
