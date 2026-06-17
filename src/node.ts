@@ -171,8 +171,10 @@ export async function attachLocalStdio(
     await terminal.resize?.(size);
     options?.onResize?.(size);
   };
+  let pendingResize = Promise.resolve();
   const handleResize = () => {
-    void resize().catch(rejectResizeFailure);
+    pendingResize = pendingResize.then(resize);
+    void pendingResize.catch(rejectResizeFailure);
   };
   const abort = () => void terminal.close("aborted").catch(() => undefined);
 
@@ -199,6 +201,8 @@ export async function attachLocalStdio(
     }
   } finally {
     aborted?.dispose();
+    stdin.off("data", writeInput);
+    stdout.off("resize", handleResize);
     try {
       if (!outputCompleted) {
         const returned = output.return?.();
@@ -208,9 +212,8 @@ export async function attachLocalStdio(
           await returned;
         }
       }
+      await pendingResize;
     } finally {
-      stdin.off("data", writeInput);
-      stdout.off("resize", handleResize);
       options?.signal?.removeEventListener("abort", abort);
       if (stdin.isTTY) {
         stdin.setRawMode(previousRaw);

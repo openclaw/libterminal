@@ -240,9 +240,22 @@ describe("attachLocalStdio", () => {
     let resizeListener: () => void = noop;
     let resizeCalls = 0;
     let resolveInitialResize: () => void = noop;
+    let rejectLaterResize: (error: Error) => void = noop;
+    let completeOutput: (result: IteratorResult<Uint8Array>) => void = noop;
     const initialResize = new Promise<void>((resolve) => {
       resolveInitialResize = resolve;
     });
+    const laterResize = new Promise<void>((_, reject) => {
+      rejectLaterResize = reject;
+    });
+    const output = {
+      [Symbol.asyncIterator]: () => ({
+        next: () =>
+          new Promise<IteratorResult<Uint8Array>>((resolve) => {
+            completeOutput = resolve;
+          }),
+      }),
+    };
     const stdin = {
       isTTY: false,
       readableFlowing: true,
@@ -262,7 +275,7 @@ describe("attachLocalStdio", () => {
     } as unknown as NodeJS.WriteStream;
     const attached = attachLocalStdio(
       {
-        output: neverOutput(),
+        output,
         close: async () => undefined,
         resize: async () => {
           resizeCalls += 1;
@@ -270,7 +283,7 @@ describe("attachLocalStdio", () => {
             resolveInitialResize();
             return;
           }
-          throw new Error("resize rejected");
+          return laterResize;
         },
       },
       { stdin, stdout },
@@ -278,6 +291,8 @@ describe("attachLocalStdio", () => {
 
     await initialResize;
     resizeListener();
+    completeOutput({ done: true, value: undefined });
+    rejectLaterResize(new Error("resize rejected"));
 
     await expect(attached).rejects.toThrow("resize rejected");
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
