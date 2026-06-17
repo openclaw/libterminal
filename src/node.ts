@@ -89,6 +89,7 @@ export async function loadNodePtyDriver(): Promise<PtyDriver> {
 export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<LocalPtySession> {
   throwIfAborted(options.signal);
   const driver = options.driver ?? (await loadNodePtyDriver());
+  throwIfAborted(options.signal);
   const size = assertTerminalSize(options.size ?? { columns: 120, rows: 34 });
   const inputDecoder = new TextDecoder();
   const terminal = driver.spawn(options.command, options.args ?? [], {
@@ -156,7 +157,7 @@ export async function attachLocalStdio(
     void terminal.resize?.(size);
     options?.onResize?.(size);
   };
-  const abort = () => void terminal.close("aborted");
+  const abort = () => void terminal.close("aborted").catch(() => undefined);
 
   if (stdin.isTTY) {
     stdin.setRawMode(true);

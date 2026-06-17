@@ -189,6 +189,8 @@ export class BatchPublisher {
   private pending: Promise<void> = Promise.resolve();
   private failure: unknown;
   private stopped = false;
+  private abortSignal?: AbortSignal;
+  private abortHandler?: () => void;
 
   constructor(sink: (bytes: Uint8Array) => Promise<void>, options?: BatchPublisherOptions) {
     this.sink = sink;
@@ -205,11 +207,9 @@ export class BatchPublisher {
       this.stopped = true;
       return;
     }
-    options?.signal?.addEventListener(
-      "abort",
-      () => void this.stop().catch((error: unknown) => this.onError?.(error)),
-      { once: true },
-    );
+    this.abortSignal = options?.signal;
+    this.abortHandler = () => void this.stop().catch((error: unknown) => this.onError?.(error));
+    this.abortSignal?.addEventListener("abort", this.abortHandler, { once: true });
   }
 
   write(bytes: Uint8Array): void {
@@ -252,6 +252,7 @@ export class BatchPublisher {
   }
 
   async stop(): Promise<void> {
+    this.detachAbort();
     if (this.stopped) {
       await this.pending;
       return;
@@ -266,6 +267,14 @@ export class BatchPublisher {
     }
     clearTimeout(this.timer);
     this.timer = undefined;
+  }
+
+  private detachAbort(): void {
+    if (this.abortSignal && this.abortHandler) {
+      this.abortSignal.removeEventListener("abort", this.abortHandler);
+    }
+    this.abortSignal = undefined;
+    this.abortHandler = undefined;
   }
 }
 

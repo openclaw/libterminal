@@ -123,7 +123,7 @@ export async function attachTerminalStream(
   try {
     for (;;) {
       const result = aborted
-        ? await Promise.race([iterator.next(), aborted])
+        ? await Promise.race([iterator.next(), aborted.promise])
         : await iterator.next();
       if (result === abortedResult || result.done) {
         return;
@@ -131,6 +131,7 @@ export async function attachTerminalStream(
       target.write(result.value);
     }
   } finally {
+    aborted?.dispose();
     if (signal?.aborted) {
       void iterator.return?.();
     }
@@ -255,16 +256,22 @@ async function loadRuntimeFromModule(
 
 const abortedResult = Symbol("aborted");
 
-function abortPromise(signal?: AbortSignal): Promise<typeof abortedResult> | undefined {
+function abortPromise(
+  signal?: AbortSignal,
+): { promise: Promise<typeof abortedResult>; dispose(): void } | undefined {
   if (!signal) {
     return undefined;
   }
   if (signal.aborted) {
-    return Promise.resolve(abortedResult);
+    return { promise: Promise.resolve(abortedResult), dispose: () => undefined };
   }
-  return new Promise((resolve) => {
-    signal.addEventListener("abort", () => resolve(abortedResult), { once: true });
+  let resolveAbort: (value: typeof abortedResult) => void = noop;
+  const promise = new Promise<typeof abortedResult>((resolve) => {
+    resolveAbort = resolve;
   });
+  const abort = () => resolveAbort(abortedResult);
+  signal.addEventListener("abort", abort, { once: true });
+  return { promise, dispose: () => signal.removeEventListener("abort", abort) };
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -299,3 +306,5 @@ function combineAbortSignals(
     },
   };
 }
+
+function noop(): void {}
