@@ -161,10 +161,18 @@ export async function attachLocalStdio(
     const write = terminal.write?.(bytes);
     void write?.catch(() => undefined);
   };
-  const resize = () => {
+  let rejectResizeFailure: (error: unknown) => void = noop;
+  const resizeFailure = new Promise<never>((_, reject) => {
+    rejectResizeFailure = reject;
+  });
+  void resizeFailure.catch(() => undefined);
+  const resize = async () => {
     const size = terminalSize(stdout);
-    void terminal.resize?.(size);
+    await terminal.resize?.(size);
     options?.onResize?.(size);
+  };
+  const handleResize = () => {
+    void resize().catch(rejectResizeFailure);
   };
   const abort = () => void terminal.close("aborted").catch(() => undefined);
 
@@ -173,16 +181,16 @@ export async function attachLocalStdio(
     stdin.resume();
   }
   stdin.on("data", writeInput);
-  stdout.on("resize", resize);
+  stdout.on("resize", handleResize);
   options?.signal?.addEventListener("abort", abort, { once: true });
 
   let outputCompleted = false;
   try {
-    resize();
+    await resize();
     for (;;) {
       const next = aborted
-        ? await Promise.race([output.next(), aborted.promise])
-        : await output.next();
+        ? await Promise.race([output.next(), aborted.promise, resizeFailure])
+        : await Promise.race([output.next(), resizeFailure]);
       if (next === abortedResult || next.done) {
         outputCompleted = next !== abortedResult;
         break;
@@ -202,7 +210,7 @@ export async function attachLocalStdio(
       }
     } finally {
       stdin.off("data", writeInput);
-      stdout.off("resize", resize);
+      stdout.off("resize", handleResize);
       options?.signal?.removeEventListener("abort", abort);
       if (stdin.isTTY) {
         stdin.setRawMode(previousRaw);

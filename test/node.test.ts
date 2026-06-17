@@ -234,6 +234,54 @@ describe("attachLocalStdio", () => {
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
     expect(paused).toBe(true);
   });
+
+  it("rejects and restores stdio when a later resize rejects", async () => {
+    const removed: string[] = [];
+    let resizeListener: () => void = noop;
+    let resizeCalls = 0;
+    let resolveInitialResize: () => void = noop;
+    const initialResize = new Promise<void>((resolve) => {
+      resolveInitialResize = resolve;
+    });
+    const stdin = {
+      isTTY: false,
+      readableFlowing: true,
+      on: () => undefined,
+      off: (event: string) => removed.push(`stdin:${event}`),
+      pause: () => undefined,
+    } as unknown as NodeJS.ReadStream;
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      on: (event: string, listener: () => void) => {
+        if (event === "resize") {
+          resizeListener = listener;
+        }
+      },
+      off: (event: string) => removed.push(`stdout:${event}`),
+    } as unknown as NodeJS.WriteStream;
+    const attached = attachLocalStdio(
+      {
+        output: neverOutput(),
+        close: async () => undefined,
+        resize: async () => {
+          resizeCalls += 1;
+          if (resizeCalls === 1) {
+            resolveInitialResize();
+            return;
+          }
+          throw new Error("resize rejected");
+        },
+      },
+      { stdin, stdout },
+    );
+
+    await initialResize;
+    resizeListener();
+
+    await expect(attached).rejects.toThrow("resize rejected");
+    expect(removed).toEqual(["stdin:data", "stdout:resize"]);
+  });
 });
 
 describe("readGhosttyAsset", () => {
@@ -291,3 +339,5 @@ function neverOutput(): AsyncIterable<Uint8Array> {
     }),
   };
 }
+
+function noop(): void {}
