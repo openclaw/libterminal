@@ -25,6 +25,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 - Reject invalid unsigned 32-bit subscribe fields instead of coercing them.
 - Reject unsupported terminal message types before encoding rather than
   allowing byte coercion.
+- Run optional Droid autoreviews from a neutral directory with tools disabled
+  so reviewed-repo instructions and configuration cannot affect the reviewer.
 - Allow subscribe payloads to request service-selected dimensions with zero
   columns and rows while keeping resize validation strict.
 - Always restore local stdio listeners, flowing state, and raw mode when

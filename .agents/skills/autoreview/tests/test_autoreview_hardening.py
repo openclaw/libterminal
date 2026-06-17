@@ -240,6 +240,49 @@ class AutoreviewHardeningTests(unittest.TestCase):
         self.assertIn("--allow-tool=web_fetch", captured[-1])
         self.assertIn("--allow-all-urls", captured[-1])
 
+    def test_droid_runs_without_tools_from_a_neutral_directory(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_run_with_heartbeat(
+            cmd: list[str],
+            cwd: Path,
+            **kwargs: object,
+        ) -> subprocess.CompletedProcess[str]:
+            captured["cmd"] = cmd
+            captured["cwd"] = cwd
+            captured["resolve_root"] = kwargs.get("resolve_root")
+            prompt_path = Path(cmd[cmd.index("-f") + 1])
+            captured["prompt_path"] = prompt_path
+            self.assertEqual(prompt_path.read_text(encoding="utf-8"), "prompt")
+            return subprocess.CompletedProcess(cmd, 0, '{"findings":[]}', "")
+
+        self.helper["run_droid"].__globals__["run_with_heartbeat"] = fake_run_with_heartbeat
+        self.helper["run_droid"].__globals__["resolve_command"] = (
+            lambda command, repo: f"/resolved/{command}"
+        )
+        args = argparse.Namespace(
+            droid_bin="droid",
+            thinking="high",
+            tools=True,
+            model="gpt-5.5",
+            stream_engine_output=False,
+        )
+        repo = Path("/repo")
+
+        self.helper["run_droid"](args, repo, "prompt")
+
+        cmd = captured["cmd"]
+        cwd = captured["cwd"]
+        self.assertIsInstance(cmd, list)
+        self.assertIsInstance(cwd, Path)
+        assert isinstance(cmd, list)
+        assert isinstance(cwd, Path)
+        self.assertNotEqual(cwd, repo)
+        self.assertEqual(cmd[cmd.index("--cwd") + 1], str(cwd))
+        self.assertEqual(cmd[cmd.index("--disabled-tools") + 1], "*")
+        self.assertEqual(captured["resolve_root"], repo)
+        self.assertFalse(Path(captured["prompt_path"]).exists())
+
 
 if __name__ == "__main__":
     unittest.main()
