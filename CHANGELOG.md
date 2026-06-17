@@ -32,8 +32,12 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
   repository-scoped read jail.
 - Reject oversized review inputs instead of issuing clean verdicts over
   truncated bundles.
+- Remove absolute checkout paths from autoreview prompts and bound the final
+  aggregate prompt.
 - Allow subscribe payloads to request service-selected dimensions with zero
   columns and rows while keeping resize validation strict.
 - Always restore local stdio listeners, flowing state, and raw mode when
   terminal output ends, aborts, or iterator cleanup fails.
 - Restore local stdio state when the initial terminal resize fails.
+- Propagate initial and later asynchronous terminal resize failures through
+  stdio cleanup.

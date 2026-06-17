@@ -1134,9 +1134,8 @@ def review_scope_policy() -> str:
 
 def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, extra_prompt: str, datasets: str) -> str:
     target_line = f"{target} {target_ref}" if target_ref else target
-    branch = current_branch(repo)
     scope_policy = review_scope_policy()
-    return textwrap.dedent(
+    prompt = textwrap.dedent(
         f"""
         You are a senior code reviewer. Review the provided git change bundle only.
 
@@ -1156,8 +1155,8 @@ def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, e
         - If there are no actionable findings, return an empty findings array and mark the patch correct.
 
         Review target: {target_line}
-        Current branch: {branch}
-        Repository: {repo}
+        Current branch: <branch-under-review>
+        Repository: <repository-under-review>
 
         {scope_policy}
 
@@ -1169,6 +1168,7 @@ def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, e
         {bundle}
         """
     ).strip()
+    return bounded(prompt)
 
 
 def toml_quoted_key_segment(value: str) -> str:
@@ -2053,7 +2053,7 @@ def self_test_engine_isolation() -> int:
             if Path(claude_record["cwd"]).resolve() == repo.resolve():
                 raise SystemExit("claude isolation self-test failed: review ran inside hostile repo")
 
-            run_pi(args, repo, f"review hostile patch\nRepository: {repo}")
+            run_pi(args, repo, "review hostile patch")
             pi_record = json.loads(record_path.read_text())
             pi_argv = pi_record["argv"]
             for required in ["--print", *pi_review_isolation_flags(), "--no-tools"]:
@@ -2061,8 +2061,8 @@ def self_test_engine_isolation() -> int:
                     raise SystemExit(f"pi isolation self-test failed: missing {required}")
             if Path(pi_record["cwd"]).resolve() == repo.resolve():
                 raise SystemExit("pi isolation self-test failed: review ran inside hostile repo")
-            if str(repo) not in pi_record["stdin"]:
-                raise SystemExit("pi isolation self-test failed: prompt omitted reviewed repo path")
+            if str(repo) in pi_record["stdin"]:
+                raise SystemExit("pi isolation self-test failed: prompt leaked reviewed repo path")
             pi_invocations = [
                 json.loads(line)
                 for line in pi_invocations_path.read_text().splitlines()

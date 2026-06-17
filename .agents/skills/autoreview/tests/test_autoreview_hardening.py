@@ -132,6 +132,17 @@ class AutoreviewHardeningTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "review input exceeds 10 characters"):
             self.helper["bounded"]("x" * 25, 10)
 
+    def test_build_prompt_hides_repo_path_and_bounds_the_final_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo = init_repo(Path(tempdir))
+
+            prompt = self.helper["build_prompt"](repo, "local", None, "diff", "", "")
+
+            self.assertNotIn(str(repo), prompt)
+            self.assertIn("Repository: <repository-under-review>", prompt)
+            with self.assertRaisesRegex(SystemExit, "review input exceeds 500000 characters"):
+                self.helper["build_prompt"](repo, "local", None, "x" * 500_000, "", "")
+
     def test_read_text_rejects_oversized_input(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             path = Path(tempdir) / "large.txt"
