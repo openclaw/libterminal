@@ -74,12 +74,14 @@
     "pack:check": "node scripts/check-pack.mjs",
     "prepack": "pnpm run build",
     "test": "vitest run",
+    "test:browser": "pnpm run build && playwright test",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "ghostty-web": "0.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/node": "^25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260613.1",
     "node-pty": "^1.1.0",
