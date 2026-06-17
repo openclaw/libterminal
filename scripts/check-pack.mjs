@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const workdir = mkdtempSync(join(tmpdir(), "libterminal-pack-"));
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmNeedsShell = process.platform === "win32";
 
 try {
-  const output = execFileSync("npm", ["pack", "--json", "--ignore-scripts"], {
+  const output = execFileSync(npm, ["pack", "--json", "--ignore-scripts"], {
     cwd: process.cwd(),
     encoding: "utf8",
+    shell: npmNeedsShell,
   });
   const [{ filename, files }] = JSON.parse(output);
   const expected = [
@@ -36,9 +39,9 @@ try {
   const archive = join(process.cwd(), filename);
   writeFileSync(join(workdir, "package.json"), '{"private":true,"type":"module"}\n');
   execFileSync(
-    "npm",
+    npm,
     ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", archive],
-    { cwd: workdir, stdio: "pipe" },
+    { cwd: workdir, shell: npmNeedsShell, stdio: "pipe" },
   );
   execFileSync(
     process.execPath,
