@@ -139,6 +139,10 @@ export async function attachLocalStdio(
   terminal: TerminalDuplex,
   options?: AttachLocalStdioOptions,
 ): Promise<void> {
+  if (options?.signal?.aborted) {
+    await terminal.close("aborted");
+    return;
+  }
   const stdin = options?.stdin ?? process.stdin;
   const stdout = options?.stdout ?? process.stdout;
   const previousRaw = stdin.isTTY ? stdin.isRaw : false;

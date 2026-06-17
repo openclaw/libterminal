@@ -201,6 +201,10 @@ export class BatchPublisher {
     if (!Number.isSafeInteger(this.flushIntervalMs) || this.flushIntervalMs < 0) {
       throw new RangeError("flushIntervalMs must be a non-negative safe integer");
     }
+    if (options?.signal?.aborted) {
+      this.stopped = true;
+      return;
+    }
     options?.signal?.addEventListener(
       "abort",
       () => void this.stop().catch((error: unknown) => this.onError?.(error)),

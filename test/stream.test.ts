@@ -59,6 +59,21 @@ describe("BatchPublisher", () => {
     await publisher.stop();
     expect(batches).toEqual(["abcd", "ef"]);
   });
+
+  it("ignores writes when constructed with an already-aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const batches: Uint8Array[] = [];
+    const publisher = new BatchPublisher(
+      async (batch) => {
+        batches.push(batch);
+      },
+      { signal: controller.signal },
+    );
+    publisher.write(bytes("ignored"));
+    await publisher.stop();
+    expect(batches).toEqual([]);
+  });
 });
 
 function bytes(value: string): Uint8Array {

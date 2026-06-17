@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachLocalStdio,
   readGhosttyAsset,
   spawnLocalPty,
   type DisposableLike,
@@ -53,6 +54,28 @@ describe("spawnLocalPty", () => {
     await session.write?.(euro.subarray(0, 2));
     await session.write?.(euro.subarray(2));
     expect(fake.writes).toEqual(["€"]);
+  });
+});
+
+describe("attachLocalStdio", () => {
+  it("honors a signal that is already aborted before touching stdio", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const reasons: Array<string | undefined> = [];
+    await attachLocalStdio(
+      {
+        output: {
+          [Symbol.asyncIterator]: () => ({
+            next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
+          }),
+        },
+        close: async (reason) => {
+          reasons.push(reason);
+        },
+      },
+      { signal: controller.signal },
+    );
+    expect(reasons).toEqual(["aborted"]);
   });
 });
 
