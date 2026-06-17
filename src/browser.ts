@@ -103,6 +103,9 @@ export async function createGhosttyTerminal(
     } else {
       terminal?.dispose();
     }
+    if (isAbortReason(options.signal, cause)) {
+      throw cause;
+    }
     options.onStatus?.({ state: "error", error: cause });
     if (cause instanceof LibterminalError) {
       throw cause;
@@ -300,6 +303,18 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
   }
+}
+
+function isAbortReason(signal: AbortSignal | undefined, cause: unknown): boolean {
+  if (!signal?.aborted) {
+    return false;
+  }
+  if (cause === signal.reason) {
+    return true;
+  }
+  return (
+    signal.reason === undefined && cause instanceof DOMException && cause.name === "AbortError"
+  );
 }
 
 function combineAbortSignals(

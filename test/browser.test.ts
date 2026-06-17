@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { attachTerminalStream } from "../src/browser.js";
+import { attachTerminalStream, createGhosttyTerminal } from "../src/browser.js";
+
+describe("createGhosttyTerminal", () => {
+  it("preserves abort reasons raised while Ghostty is loading", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancelled by caller");
+    let finishLoad: ((value: unknown) => void) | undefined;
+    const loaded = new Promise((resolve) => {
+      finishLoad = resolve;
+    });
+    const module = {
+      Ghostty: { load: () => loaded },
+    } as unknown as typeof import("ghostty-web");
+
+    const created = createGhosttyTerminal({
+      parent: {} as HTMLElement,
+      runtimeOptions: { module },
+      signal: controller.signal,
+    });
+    controller.abort(reason);
+    finishLoad?.({});
+
+    await expect(created).rejects.toBe(reason);
+  });
+});
 
 describe("attachTerminalStream", () => {
   it("writes terminal byte chunks in order", async () => {
