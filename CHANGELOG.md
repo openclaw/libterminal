@@ -4,6 +4,15 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+## 0.1.1 - 2026-06-17
+
+### Changed
+
+- Update the TypeScript native-preview development toolchain.
+- Update pinned checkout and pnpm setup GitHub Actions.
+
+## 0.1.0 - 2026-06-17
+
 ### Added
 
 - Publish terminal protocol v2 codecs and canonical golden vectors.

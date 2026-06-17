@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/libterminal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared TypeScript terminal protocol, streaming, browser, Node, and Worker primitives",
   "keywords": [
     "ghostty",
