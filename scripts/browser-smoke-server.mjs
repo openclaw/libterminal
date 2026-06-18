@@ -65,6 +65,11 @@ server.listen(port, host, () => {
   console.log(`browser smoke server listening on http://${host}:${port}`);
 });
 
+/**
+ * @param {import("node:http").ServerResponse} response
+ * @param {string | Uint8Array} body
+ * @param {string} contentType
+ */
 function send(response, body, contentType) {
   response.writeHead(200, {
     "cache-control": "no-store",

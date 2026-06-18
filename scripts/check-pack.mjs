@@ -8,19 +8,32 @@ const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const npmNeedsShell = process.platform === "win32";
 
 try {
-  const output = execFileSync(npm, ["pack", "--json", "--ignore-scripts"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    shell: npmNeedsShell,
-  });
-  const [{ filename, files }] = JSON.parse(output);
+  const output = execFileSync(
+    npm,
+    ["pack", "--json", "--ignore-scripts", "--pack-destination", workdir],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      shell: npmNeedsShell,
+    },
+  );
+  /** @type {Array<{ filename: string; files: Array<{ path: string }> }>} */
+  const pack = JSON.parse(output);
+  const [{ filename, files }] = pack;
   const expected = [
+    "dist/browser.d.ts",
     "dist/browser.js",
+    "dist/index.d.ts",
     "dist/index.js",
+    "dist/node.d.ts",
     "dist/node.js",
+    "dist/protocol.d.ts",
     "dist/protocol.js",
+    "dist/stream.d.ts",
     "dist/stream.js",
+    "dist/testing.d.ts",
     "dist/testing.js",
+    "dist/worker.d.ts",
     "dist/worker.js",
     "protocol/terminal-v2.json",
   ];
@@ -36,7 +49,7 @@ try {
     throw new Error(`unexpected package name: ${pkg.name}`);
   }
 
-  const archive = join(process.cwd(), filename);
+  const archive = join(workdir, filename);
   writeFileSync(join(workdir, "package.json"), '{"private":true,"type":"module"}\n');
   execFileSync(
     npm,
@@ -60,8 +73,6 @@ try {
     ],
     { cwd: workdir, stdio: "pipe" },
   );
-
-  rmSync(filename, { force: true });
 } finally {
   rmSync(workdir, { force: true, recursive: true });
 }

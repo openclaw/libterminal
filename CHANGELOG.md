@@ -4,6 +4,11 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+- Fix release-tag ancestry validation after `main` advances.
+- Run the Ghostty browser smoke test before publishing.
+- Verify exported declarations and keep pack-check archives out of the repository root.
+- Include release scripts in TypeScript checking.
+
 ## 0.1.1 - 2026-06-17
 
 ### Changed
