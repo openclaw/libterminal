@@ -67,7 +67,7 @@
   },
   "scripts": {
     "build": "tsdown src/index.ts src/protocol.ts src/stream.ts src/browser.ts src/node.ts src/worker.ts src/testing.ts --format esm --dts --clean --target es2023 --no-fixedExtension --deps.never-bundle ghostty-web --deps.never-bundle node-pty",
-    "check": "pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build && pnpm run pack:check",
+    "check": "pnpm run format:check && pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run pack:check",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware --deny-warnings src test",
