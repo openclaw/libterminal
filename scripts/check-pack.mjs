@@ -35,6 +35,8 @@ try {
     "dist/testing.js",
     "dist/worker.d.ts",
     "dist/worker.js",
+    "dist/worker-assets.d.ts",
+    "dist/worker-assets.js",
     "protocol/terminal-v2.json",
   ];
   const paths = new Set(files.map((file) => file.path));
@@ -68,6 +70,7 @@ try {
         "@openclaw/libterminal/browser",
         "@openclaw/libterminal/node",
         "@openclaw/libterminal/worker",
+        "@openclaw/libterminal/worker-assets",
         "@openclaw/libterminal/testing",
       ])}.map((specifier) => import(specifier)));`,
     ],

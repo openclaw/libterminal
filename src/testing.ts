@@ -14,6 +14,7 @@ export const LIBTERMINAL_EXPORTS = [
   "@openclaw/libterminal/browser",
   "@openclaw/libterminal/node",
   "@openclaw/libterminal/worker",
+  "@openclaw/libterminal/worker-assets",
   "@openclaw/libterminal/testing",
 ] as const;
 

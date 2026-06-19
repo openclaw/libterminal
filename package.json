@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/libterminal",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared TypeScript terminal protocol, streaming, browser, Node, and Worker primitives",
   "keywords": [
     "ghostty",
@@ -54,6 +54,10 @@
       "types": "./dist/worker.d.ts",
       "import": "./dist/worker.js"
     },
+    "./worker-assets": {
+      "types": "./dist/worker-assets.d.ts",
+      "import": "./dist/worker-assets.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
@@ -66,16 +70,17 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown src/index.ts src/protocol.ts src/stream.ts src/browser.ts src/node.ts src/worker.ts src/testing.ts --format esm --dts --clean --target es2023 --no-fixedExtension --deps.never-bundle ghostty-web --deps.never-bundle node-pty",
+    "build": "pnpm run generate:worker-assets && tsdown src/index.ts src/protocol.ts src/stream.ts src/browser.ts src/node.ts src/worker.ts src/worker-assets.ts src/testing.ts --format esm --dts --clean --target es2023 --no-fixedExtension --deps.never-bundle ghostty-web --deps.never-bundle node-pty",
     "check": "pnpm run format:check && pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run pack:check",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint --type-aware --deny-warnings src test",
+    "generate:worker-assets": "node scripts/generate-worker-ghostty-assets.mjs",
+    "lint": "pnpm run generate:worker-assets && oxlint --type-aware --deny-warnings src test",
     "pack:check": "node scripts/check-pack.mjs",
     "prepack": "pnpm run build",
-    "test": "vitest run",
+    "test": "pnpm run generate:worker-assets && vitest run",
     "test:browser": "pnpm run build && playwright test",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "pnpm run generate:worker-assets && tsgo --noEmit"
   },
   "dependencies": {
     "ghostty-web": "0.4.0"

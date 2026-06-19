@@ -4,6 +4,14 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+## 0.3.0 - 2026-06-19
+
+### Added
+
+- Add an optional Worker-safe Ghostty asset export for serving the pinned
+  browser module, WASM, and browser-external shim without application-local
+  asset generation.
+
 ## 0.2.0 - 2026-06-19
 
 ### Added

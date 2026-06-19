@@ -31,6 +31,7 @@ pnpm add node-pty
 - `@openclaw/libterminal/browser`: Ghostty WASM terminal integration and terminal hub client
 - `@openclaw/libterminal/node`: local PTY, raw stdin, and asset helpers
 - `@openclaw/libterminal/worker`: Worker-compatible WebSocket bridging
+- `@openclaw/libterminal/worker-assets`: optional Worker-safe Ghostty asset payloads
 - `@openclaw/libterminal/testing`: deterministic terminal test doubles
 
 ## Browser
@@ -108,6 +109,24 @@ await bridge.completed;
 
 The product remains responsible for authenticating both sockets and deciding
 which capabilities grant control.
+
+Use the optional Worker asset export to serve the pinned Ghostty module, WASM,
+and browser-external shim without an application-local asset generator. The
+product owns the route, cache policy, and security headers.
+
+```ts
+import { GHOSTTY_ASSET_PATHS, readGhosttyWorkerAsset } from "@openclaw/libterminal/worker-assets";
+
+const asset = readGhosttyWorkerAsset(new URL(request.url).pathname);
+if (asset) {
+  return new Response(asset.body, {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": asset.contentType,
+    },
+  });
+}
+```
 
 ## Protocol
 
