@@ -210,7 +210,6 @@ export class TerminalHubClient {
   private readonly options: TerminalHubClientOptions;
   private socket: TerminalHubWebSocket | undefined;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-  private messageQueue = Promise.resolve();
   private closedByCaller = false;
 
   constructor(options: TerminalHubClientOptions) {
@@ -236,9 +235,16 @@ export class TerminalHubClient {
       return;
     }
     this.socket = socket;
+    let messageQueue = Promise.resolve();
+    const enqueueMessage = (task: () => Promise<void>) => {
+      messageQueue = messageQueue
+        .catch(noop)
+        .then(task)
+        .catch((error: unknown) => this.reportError(error));
+    };
     socket.binaryType = "arraybuffer";
     socket.addEventListener("open", this.handleOpen(socket));
-    socket.addEventListener("message", this.handleMessage(socket));
+    socket.addEventListener("message", this.handleMessage(socket, enqueueMessage));
     socket.addEventListener("close", this.handleClose(socket));
     socket.addEventListener("error", this.handleError(socket));
   }
@@ -286,23 +292,23 @@ export class TerminalHubClient {
     };
   }
 
-  private handleMessage(socket: TerminalHubWebSocket): (event: { data: unknown }) => void {
+  private handleMessage(
+    socket: TerminalHubWebSocket,
+    enqueueMessage: (task: () => Promise<void>) => void,
+  ): (event: { data: unknown }) => void {
     return (event) => {
-      this.messageQueue = this.messageQueue
-        .catch(noop)
-        .then(async () => {
-          if (this.socket !== socket) {
-            return;
-          }
-          const frame = tryDecodeTerminalFrame(
-            await terminalFrameBytes(event.data),
-            this.options.frameLimits,
-          );
-          if (frame && this.socket === socket) {
-            this.notify(() => this.options.onFrame?.(frame));
-          }
-        })
-        .catch((error: unknown) => this.reportError(error));
+      enqueueMessage(async () => {
+        if (this.socket !== socket) {
+          return;
+        }
+        const frame = tryDecodeTerminalFrame(
+          await terminalFrameBytes(event.data),
+          this.options.frameLimits,
+        );
+        if (frame && this.socket === socket) {
+          this.notify(() => this.options.onFrame?.(frame));
+        }
+      });
     };
   }
 
@@ -380,6 +386,7 @@ class BrowserTerminalController implements GhosttyTerminalController {
   private readonly options: CreateGhosttyTerminalOptions;
   private inputSubscription?: IDisposable;
   private resizeSubscription?: IDisposable;
+  private abortListener?: () => void;
   private disposed = false;
   private currentReadOnly: boolean;
   private readonly disposeController = new AbortController();
@@ -417,7 +424,14 @@ class BrowserTerminalController implements GhosttyTerminalController {
     if (this.options.autoFit !== false) {
       this.fitAddon.observeResize();
     }
-    this.options.signal?.addEventListener("abort", () => this.dispose(), { once: true });
+    const signal = this.options.signal;
+    if (signal) {
+      this.abortListener = () => this.dispose();
+      signal.addEventListener("abort", this.abortListener, { once: true });
+      if (signal.aborted) {
+        this.abortListener();
+      }
+    }
   }
 
   write(bytes: Uint8Array): void {
@@ -465,6 +479,10 @@ class BrowserTerminalController implements GhosttyTerminalController {
     }
     this.disposed = true;
     this.disposeController.abort("terminal disposed");
+    if (this.abortListener) {
+      this.options.signal?.removeEventListener("abort", this.abortListener);
+      this.abortListener = undefined;
+    }
     this.inputSubscription?.dispose();
     this.resizeSubscription?.dispose();
     this.fitAddon.dispose();

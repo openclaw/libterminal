@@ -10,6 +10,18 @@ describe("BoundedReplayBuffer", () => {
     replay.append(bytes("123456"));
     expect(text(replay.snapshot())).toBe("23456");
   });
+
+  it("trims fragmented output without recursive stack growth", () => {
+    const replay = new BoundedReplayBuffer(20_000);
+    for (let index = 0; index < 20_000; index += 1) {
+      replay.append(new Uint8Array([index % 256]));
+    }
+
+    replay.append(new Uint8Array(20_000).fill(42));
+    expect(replay.byteLength).toBe(20_000);
+    expect(replay.snapshot()).toHaveLength(1);
+    expect(replay.snapshot()[0]).toEqual(new Uint8Array(20_000).fill(42));
+  });
 });
 
 describe("TerminalFanout", () => {

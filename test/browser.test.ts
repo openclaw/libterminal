@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   TerminalHubClient,
   attachTerminalStream,
@@ -28,6 +28,28 @@ describe("createGhosttyTerminal", () => {
     finishLoad?.({});
 
     await expect(created).rejects.toBe(reason);
+  });
+
+  it("removes the caller abort listener when the terminal is disposed", async () => {
+    const listeners = new Set<() => void>();
+    const signal = {
+      aborted: false,
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+    } as unknown as AbortSignal;
+    const controller = await createGhosttyTerminal({
+      parent: {} as HTMLElement,
+      signal,
+      runtime: {
+        ghostty: {},
+        Terminal: TestGhosttyTerminal,
+        FitAddon: TestGhosttyFitAddon,
+      } as never,
+    });
+
+    expect(listeners.size).toBe(1);
+    controller.dispose();
+    expect(listeners.size).toBe(0);
   });
 });
 
@@ -166,6 +188,55 @@ describe("TerminalHubClient", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(sockets).toHaveLength(2);
   });
+
+  it("does not let a stalled prior socket block frames after reconnecting", async () => {
+    const sockets: TestTerminalHubSocket[] = [];
+    const frames: string[] = [];
+    let resolveOldPayload: (value: ArrayBuffer) => void = noop;
+    const oldPayload = new Promise<ArrayBuffer>((resolve) => {
+      resolveOldPayload = resolve;
+    });
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      reconnectDelayMs: 1,
+      shouldReconnect: () => true,
+      socketFactory: () => {
+        const socket = new TestTerminalHubSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      onFrame: (frame) => frames.push(new TextDecoder().decode(frame.payload)),
+    });
+
+    client.connect();
+    sockets[0]?.open();
+    sockets[0]?.receive({ arrayBuffer: () => oldPayload });
+    await Promise.resolve();
+    sockets[0]?.emitClose();
+    await waitForSockets(sockets, 2);
+    sockets[1]?.open();
+    sockets[1]?.receive(
+      encodeTerminalFrame({
+        type: TerminalMessageType.Output,
+        sessionId: "IS-2",
+        payload: new TextEncoder().encode("new"),
+      }),
+    );
+
+    await vi.waitFor(() => expect(frames).toEqual(["new"]));
+    resolveOldPayload(
+      ownedArrayBuffer(
+        encodeTerminalFrame({
+          type: TerminalMessageType.Output,
+          sessionId: "IS-1",
+          payload: new TextEncoder().encode("old"),
+        }),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(frames).toEqual(["new"]);
+    client.close();
+  });
 });
 
 async function* chunks(...values: string[]): AsyncIterable<Uint8Array> {
@@ -256,6 +327,40 @@ class TestTerminalHubSocket implements TerminalHubWebSocket {
   }
 }
 
+class TestGhosttyTerminal {
+  readonly options: { disableStdin?: boolean };
+
+  constructor(options: { disableStdin?: boolean }) {
+    this.options = options;
+  }
+
+  loadAddon(): void {}
+
+  open(): void {}
+
+  onData(): { dispose(): void } {
+    return { dispose: () => undefined };
+  }
+
+  onResize(): { dispose(): void } {
+    return { dispose: () => undefined };
+  }
+
+  resize(): void {}
+
+  write(): void {}
+
+  dispose(): void {}
+}
+
+class TestGhosttyFitAddon {
+  fit(): void {}
+
+  observeResize(): void {}
+
+  dispose(): void {}
+}
+
 async function waitForFrames(
   frames: Array<{ sessionId: string; payload: string }>,
   count: number,
@@ -278,3 +383,5 @@ function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   copied.set(bytes);
   return copied.buffer;
 }
+
+function noop(): void {}

@@ -86,9 +86,10 @@ export async function loadNodePtyDriver(): Promise<PtyDriver> {
 
 export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<LocalPtySession> {
   throwIfAborted(options.signal);
+  const size = assertTerminalSize(options.size ?? { columns: 120, rows: 34 });
+  const output = new AsyncByteQueue(options.outputBufferBytes, options.onOutputDrop);
   const driver = options.driver ?? (await loadNodePtyDriver());
   throwIfAborted(options.signal);
-  const size = assertTerminalSize(options.size ?? { columns: 120, rows: 34 });
   const inputDecoder = new TextDecoder();
   const terminal = driver.spawn(options.command, options.args ?? [], {
     name: options.name ?? process.env.TERM ?? "xterm-256color",
@@ -115,7 +116,6 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
       terminal.kill(signal);
     }
   };
-  const output = new AsyncByteQueue(options.outputBufferBytes, options.onOutputDrop);
   const dataSubscription = terminal.onData((data) => {
     const bytes = textEncoder.encode(data);
     output.push(bytes);
@@ -170,10 +170,18 @@ export async function attachLocalStdio(
   const aborted = abortPromise(options?.signal);
   const previousRaw = stdin.isTTY ? stdin.isRaw : false;
   const previousFlowing = stdin.readableFlowing;
+  let rejectInputFailure: (error: unknown) => void = noop;
+  const inputFailure = new Promise<never>((_, reject) => {
+    rejectInputFailure = reject;
+  });
+  void inputFailure.catch(noop);
+  let pendingInput = Promise.resolve();
   const writeInput = (data: Buffer | string) => {
     const bytes = typeof data === "string" ? textEncoder.encode(data) : data;
-    const write = terminal.write?.(bytes);
-    void write?.catch(() => undefined);
+    pendingInput = pendingInput.then(async () => {
+      await terminal.write?.(bytes);
+    });
+    void pendingInput.catch(rejectInputFailure);
   };
   let rejectResizeFailure: (error: unknown) => void = noop;
   const resizeFailure = new Promise<never>((_, reject) => {
@@ -205,13 +213,16 @@ export async function attachLocalStdio(
     await resize();
     for (;;) {
       const next = aborted
-        ? await Promise.race([output.next(), aborted.promise, resizeFailure])
-        : await Promise.race([output.next(), resizeFailure]);
+        ? await Promise.race([output.next(), aborted.promise, resizeFailure, inputFailure])
+        : await Promise.race([output.next(), resizeFailure, inputFailure]);
       if (next === abortedResult || next.done) {
         outputCompleted = next !== abortedResult;
         break;
       }
       await writeToStream(stdout, next.value);
+    }
+    if (outputCompleted) {
+      await pendingInput;
     }
   } finally {
     aborted?.dispose();
@@ -221,7 +232,7 @@ export async function attachLocalStdio(
       if (!outputCompleted) {
         const returned = output.return?.();
         if (options?.signal?.aborted) {
-          void returned;
+          void Promise.resolve(returned).catch(noop);
         } else {
           await returned;
         }
