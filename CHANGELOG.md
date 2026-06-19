@@ -4,6 +4,19 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Validate PTY buffering before process creation, serialize local stdin writes,
+  and suppress abort-only iterator cleanup rejections.
+- Keep terminal hub message ordering scoped to each WebSocket connection and
+  release browser terminal abort listeners on disposal.
+- Trim fragmented terminal replay iteratively instead of recursing.
+- Generate Worker Ghostty assets atomically and validate packed packages without
+  Windows shell argument reconstruction.
+- Require protected semantic release tags for trusted npm publishing and fail
+  closed when npm registry lookups fail for reasons other than an unpublished
+  version.
+
 ## 0.3.0 - 2026-06-19
 
 ### Added

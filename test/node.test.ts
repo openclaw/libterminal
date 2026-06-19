@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   attachLocalStdio,
   GHOSTTY_ASSET_PATHS,
@@ -55,6 +55,20 @@ describe("spawnLocalPty", () => {
     await session.write?.(euro.subarray(0, 2));
     await session.write?.(euro.subarray(2));
     expect(fake.writes).toEqual(["€"]);
+  });
+
+  it("rejects invalid output buffering before spawning a PTY", async () => {
+    const fake = new FakePtyDriver();
+
+    await expect(
+      spawnLocalPty({
+        command: "codex",
+        cwd: "/workspace",
+        driver: fake,
+        outputBufferBytes: 0,
+      }),
+    ).rejects.toThrow("outputBufferBytes must be a positive safe integer");
+    expect(fake.spawnCalls).toBe(0);
   });
 
   it("flushes partial UTF-8 input once before closing the PTY", async () => {
@@ -137,6 +151,78 @@ describe("attachLocalStdio", () => {
     expect(reasons).toEqual(["aborted"]);
     expect(removed).toEqual(["stdin:data", "stdout:resize"]);
     expect(paused).toBe(true);
+  });
+
+  it("serializes stdin writes before forwarding the next input chunk", async () => {
+    const controller = new AbortController();
+    const stdio = testStdio();
+    const writes: string[] = [];
+    let resolveFirstWrite: () => void = noop;
+    const firstWrite = new Promise<void>((resolve) => {
+      resolveFirstWrite = resolve;
+    });
+    const attached = attachLocalStdio(
+      {
+        output: neverOutput(),
+        close: async () => undefined,
+        write: async (bytes) => {
+          writes.push(new TextDecoder().decode(bytes));
+          if (writes.length === 1) {
+            await firstWrite;
+          }
+        },
+      },
+      { signal: controller.signal, stdin: stdio.stdin, stdout: stdio.stdout },
+    );
+
+    stdio.input("first");
+    stdio.input("second");
+    await vi.waitFor(() => expect(writes).toEqual(["first"]));
+    resolveFirstWrite();
+    await vi.waitFor(() => expect(writes).toEqual(["first", "second"]));
+
+    controller.abort();
+    await attached;
+  });
+
+  it("rejects and restores stdio when writing stdin fails", async () => {
+    const stdio = testStdio();
+    const attached = attachLocalStdio(
+      {
+        output: neverOutput(),
+        close: async () => undefined,
+        write: async () => {
+          throw new Error("stdin write failed");
+        },
+      },
+      { stdin: stdio.stdin, stdout: stdio.stdout },
+    );
+
+    stdio.input("broken");
+    await expect(attached).rejects.toThrow("stdin write failed");
+  });
+
+  it("suppresses iterator cleanup failures after an abort", async () => {
+    const controller = new AbortController();
+    const returned = vi.fn(async () => {
+      throw new Error("iterator cleanup failed");
+    });
+    const output = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
+        return: returned,
+      }),
+    };
+    const stdio = testStdio();
+    const attached = attachLocalStdio(
+      { output, close: async () => undefined },
+      { signal: controller.signal, stdin: stdio.stdin, stdout: stdio.stdout },
+    );
+
+    controller.abort();
+    await expect(attached).resolves.toBeUndefined();
+    await Promise.resolve();
+    expect(returned).toHaveBeenCalledOnce();
   });
 
   it("closes the output iterator when stdout fails", async () => {
@@ -334,6 +420,7 @@ describe("readGhosttyAsset", () => {
 });
 
 class FakePtyDriver implements PtyDriver {
+  spawnCalls = 0;
   readonly writes: string[] = [];
   readonly sizes: Array<{ columns: number; rows: number }> = [];
   readonly kills: Array<string | undefined> = [];
@@ -341,6 +428,7 @@ class FakePtyDriver implements PtyDriver {
   private exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined;
 
   spawn() {
+    this.spawnCalls += 1;
     return {
       onData: (listener: (data: string) => void): DisposableLike => {
         this.dataListener = listener;
@@ -372,6 +460,40 @@ function neverOutput(): AsyncIterable<Uint8Array> {
     [Symbol.asyncIterator]: () => ({
       next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
     }),
+  };
+}
+
+function testStdio(): {
+  stdin: NodeJS.ReadStream;
+  stdout: NodeJS.WriteStream;
+  input(value: string): void;
+} {
+  let inputListener: (data: Buffer) => void = noop;
+  const stdin = {
+    isTTY: false,
+    readableFlowing: null,
+    on: (event: string, listener: (data: Buffer) => void) => {
+      if (event === "data") {
+        inputListener = listener;
+      }
+    },
+    off: () => undefined,
+    pause: () => undefined,
+  } as unknown as NodeJS.ReadStream;
+  const stdout = {
+    columns: 80,
+    rows: 24,
+    on: () => undefined,
+    off: () => undefined,
+    write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
+      callback();
+      return true;
+    },
+  } as unknown as NodeJS.WriteStream;
+  return {
+    stdin,
+    stdout,
+    input: (value) => inputListener(Buffer.from(value)),
   };
 }
 

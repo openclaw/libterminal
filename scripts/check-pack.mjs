@@ -1,21 +1,56 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 const workdir = mkdtempSync(join(tmpdir(), "libterminal-pack-"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const npmNeedsShell = process.platform === "win32";
+const npmCommand = resolveNpmCli();
+
+/**
+ * @param {string[]} args
+ * @param {import("node:child_process").ExecFileSyncOptions} options
+ */
+function runNpm(args, options) {
+  return execFileSync(process.execPath, [npmCommand, ...args], options);
+}
+
+function resolveNpmCli() {
+  const candidates = [
+    process.env.npm_execpath,
+    join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  if (process.platform !== "win32") {
+    try {
+      candidates.push(
+        realpathSync(String(execFileSync("which", ["npm"], { encoding: "utf8" })).trim()),
+      );
+    } catch {
+      // The standard bundled paths remain valid on supported non-Windows Node installations.
+    }
+  }
+  const npmCli = candidates.find(
+    (candidate) => candidate && basename(candidate) === "npm-cli.js" && existsSync(candidate),
+  );
+  if (!npmCli) {
+    throw new Error("could not resolve npm-cli.js from the current Node installation");
+  }
+  return npmCli;
+}
 
 try {
-  const output = execFileSync(
-    npm,
-    ["pack", "--json", "--ignore-scripts", "--pack-destination", workdir],
-    {
+  const output = String(
+    runNpm(["pack", "--json", "--ignore-scripts", "--pack-destination", workdir], {
       cwd: process.cwd(),
       encoding: "utf8",
-      shell: npmNeedsShell,
-    },
+    }),
   );
   /** @type {Array<{ filename: string; files: Array<{ path: string }> }>} */
   const pack = JSON.parse(output);
@@ -53,11 +88,10 @@ try {
 
   const archive = join(workdir, filename);
   writeFileSync(join(workdir, "package.json"), '{"private":true,"type":"module"}\n');
-  execFileSync(
-    npm,
-    ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", archive],
-    { cwd: workdir, shell: npmNeedsShell, stdio: "pipe" },
-  );
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", archive], {
+    cwd: workdir,
+    stdio: "pipe",
+  });
   execFileSync(
     process.execPath,
     [

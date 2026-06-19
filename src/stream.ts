@@ -59,19 +59,19 @@ export class BoundedReplayBuffer {
   }
 
   private trim(): void {
-    if (this.storedBytes > this.maxBytes) {
+    while (this.storedBytes > this.maxBytes) {
       const chunk = this.chunks[0];
       if (!chunk) {
         return;
       }
       const excess = this.storedBytes - this.maxBytes;
-      const trimmed = chunk.slice(Math.min(excess, chunk.byteLength));
-      this.chunks[0] = trimmed;
-      this.storedBytes -= chunk.byteLength - trimmed.byteLength;
-      if (trimmed.byteLength === 0) {
+      if (excess >= chunk.byteLength) {
         this.chunks.shift();
-        this.trim();
+        this.storedBytes -= chunk.byteLength;
+        continue;
       }
+      this.chunks[0] = chunk.slice(excess);
+      this.storedBytes -= excess;
     }
   }
 }
