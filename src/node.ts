@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { GHOSTTY_ASSET_PATHS, type GhosttyAsset } from "./ghostty-assets.js";
 import {
   assertTerminalSize,
   LibterminalError,
@@ -9,6 +10,8 @@ import {
   type TerminalExit,
   type TerminalSize,
 } from "./index.js";
+
+export { GHOSTTY_ASSET_PATHS, type GhosttyAsset } from "./ghostty-assets.js";
 
 export type DisposableLike = {
   dispose(): void;
@@ -59,17 +62,6 @@ export type AttachLocalStdioOptions = {
   signal?: AbortSignal;
   onResize?: (size: TerminalSize) => void;
 };
-
-export type GhosttyAsset = {
-  body: Uint8Array;
-  contentType: string;
-};
-
-export const GHOSTTY_ASSET_PATHS = {
-  module: "/vendor/ghostty-web.js",
-  wasm: "/vendor/ghostty-vt.wasm",
-  browserExternal: "/vendor/__vite-browser-external-2447137e.js",
-} as const;
 
 const textEncoder = new TextEncoder();
 

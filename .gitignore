@@ -5,6 +5,7 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 *.tgz
+src/worker-ghostty-assets.generated.ts
 
 .env
 .env.*
