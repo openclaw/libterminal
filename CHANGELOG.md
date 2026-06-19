@@ -2,7 +2,7 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## Unreleased
+## 0.3.1 - 2026-06-19
 
 ### Fixed
 
