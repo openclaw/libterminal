@@ -4,6 +4,13 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+## 0.2.0 - 2026-06-19
+
+### Added
+
+- Add a browser terminal hub client with terminal protocol framing, ordered
+  binary message delivery, and opt-in reconnect scheduling.
+
 ## 0.1.2 - 2026-06-18
 
 ### Fixed

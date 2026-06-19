@@ -7,6 +7,10 @@ const port = 4179;
 const files = new Map([
   ["/dist/browser.js", { path: "dist/browser.js", contentType: "text/javascript; charset=utf-8" }],
   ["/dist/index.js", { path: "dist/index.js", contentType: "text/javascript; charset=utf-8" }],
+  [
+    "/dist/protocol.js",
+    { path: "dist/protocol.js", contentType: "text/javascript; charset=utf-8" },
+  ],
 ]);
 const html = `<!doctype html>
 <html>

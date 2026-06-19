@@ -28,7 +28,7 @@ pnpm add node-pty
 - `@openclaw/libterminal`: universal terminal types and errors
 - `@openclaw/libterminal/protocol`: terminal protocol v2 codecs
 - `@openclaw/libterminal/stream`: bounded replay, fanout, and batching
-- `@openclaw/libterminal/browser`: Ghostty WASM browser terminal integration
+- `@openclaw/libterminal/browser`: Ghostty WASM terminal integration and terminal hub client
 - `@openclaw/libterminal/node`: local PTY, raw stdin, and asset helpers
 - `@openclaw/libterminal/worker`: Worker-compatible WebSocket bridging
 - `@openclaw/libterminal/testing`: deterministic terminal test doubles
@@ -53,6 +53,22 @@ await terminal.attach(output);
 Use `GHOSTTY_ASSET_PATHS` and `readGhosttyAsset()` from the Node.js export to
 serve the pinned `ghostty-web` module, WASM, and browser-external shim under
 their canonical `/vendor` routes.
+
+`TerminalHubClient` owns protocol framing, binary message normalization, and
+optional reconnect scheduling for multiplexed terminal WebSockets. Applications
+continue to own URL construction, authorization, session subscriptions, and
+terminal lifecycle.
+
+```ts
+import { TerminalHubClient } from "@openclaw/libterminal/browser";
+
+const hub = new TerminalHubClient({
+  url: () => terminalHubUrl(),
+  shouldReconnect: () => activeTerminalCount() > 0,
+  onFrame: handleTerminalFrame,
+});
+hub.connect();
+```
 
 ## Node.js
 
