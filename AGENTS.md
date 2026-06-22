@@ -50,6 +50,7 @@ Use repository scripts instead of invoking underlying tools directly:
 pnpm build
 pnpm test
 pnpm check
+pnpm run check:release
 ```
 
 Run the smallest relevant test while iterating. Run `pnpm check` before handoff

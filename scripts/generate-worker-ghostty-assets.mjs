@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,7 @@ const distPath = path.dirname(modulePath);
 const generatedPath = fileURLToPath(
   new URL("../src/worker-ghostty-assets.generated.ts", import.meta.url),
 );
+const browserExternalPath = await findBrowserExternalAsset(distPath);
 const assets = [
   {
     key: "module",
@@ -21,7 +22,7 @@ const assets = [
   },
   {
     key: "browserExternal",
-    path: path.join(distPath, "__vite-browser-external-2447137e.js"),
+    path: browserExternalPath,
     contentType: "text/javascript; charset=utf-8",
   },
 ];
@@ -48,4 +49,21 @@ try {
   await rename(temporaryPath, generatedPath);
 } finally {
   await rm(temporaryPath, { force: true });
+}
+
+/**
+ * @param {string} distPath
+ * @returns {Promise<string>}
+ */
+async function findBrowserExternalAsset(distPath) {
+  const entries = await readdir(distPath);
+  const matches = entries.filter((entry) =>
+    /^__vite-browser-external-[A-Za-z0-9_-]+\.js$/.test(entry),
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected one ghostty-web browser external asset in ${distPath}, found ${matches.length}`,
+    );
+  }
+  return path.join(distPath, matches[0]);
 }

@@ -221,9 +221,6 @@ export async function attachLocalStdio(
       }
       await writeToStream(stdout, next.value);
     }
-    if (outputCompleted) {
-      await pendingInput;
-    }
   } finally {
     aborted?.dispose();
     stdin.off("data", writeInput);
@@ -274,7 +271,7 @@ export async function ensureNodePtySpawnHelperExecutable(): Promise<void> {
 }
 
 export async function readGhosttyAsset(pathname: string): Promise<GhosttyAsset | null> {
-  const asset = ghosttyAssets().get(pathname);
+  const asset = (await ghosttyAssets()).get(pathname);
   if (!asset) {
     return null;
   }
@@ -381,9 +378,10 @@ function writeToStream(stream: NodeJS.WriteStream, bytes: Uint8Array): Promise<v
   });
 }
 
-function ghosttyAssets(): Map<string, { path: string; contentType: string }> {
+async function ghosttyAssets(): Promise<Map<string, { path: string; contentType: string }>> {
   const modulePath = fileURLToPath(import.meta.resolve("ghostty-web"));
   const distPath = path.dirname(modulePath);
+  const browserExternalPath = await findBrowserExternalAsset(distPath);
   return new Map([
     [
       GHOSTTY_ASSET_PATHS.module,
@@ -399,11 +397,25 @@ function ghosttyAssets(): Map<string, { path: string; contentType: string }> {
     [
       GHOSTTY_ASSET_PATHS.browserExternal,
       {
-        path: path.join(distPath, "__vite-browser-external-2447137e.js"),
+        path: browserExternalPath,
         contentType: "text/javascript; charset=utf-8",
       },
     ],
   ]);
+}
+
+async function findBrowserExternalAsset(distPath: string): Promise<string> {
+  const entries = await fs.readdir(distPath);
+  const matches = entries.filter((entry) =>
+    /^__vite-browser-external-[A-Za-z0-9_-]+\.js$/.test(entry),
+  );
+  if (matches.length !== 1) {
+    throw new LibterminalError(
+      "ghostty_unavailable",
+      `expected one ghostty-web browser external asset in ${distPath}, found ${matches.length}`,
+    );
+  }
+  return path.join(distPath, matches[0]);
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

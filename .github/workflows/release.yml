@@ -129,14 +129,11 @@ jobs:
             exit "${status}"
           fi
 
-      - name: Check
-        run: pnpm check
-
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run Ghostty browser smoke
-        run: pnpm test:browser
+      - name: Release check
+        run: pnpm run check:release
 
       - name: Publish with npm trusted publishing
         run: npm publish --access public --provenance

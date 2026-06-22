@@ -2,6 +2,13 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Harden release and runtime validation for portable typechecking, browser smoke
+  coverage, Ghostty asset discovery, and local stdio cleanup.
+
 ## 0.3.1 - 2026-06-19
 
 ### Fixed

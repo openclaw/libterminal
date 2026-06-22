@@ -154,4 +154,5 @@ surfaces.
 ```sh
 pnpm install
 pnpm check
+pnpm run check:release
 ```

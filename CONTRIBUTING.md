@@ -21,6 +21,7 @@ Use the Node.js and pnpm versions declared by the repository.
 ```bash
 pnpm install
 pnpm check
+pnpm run check:release
 ```
 
 Use the smallest relevant command while iterating:

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": [
+    "src/index.ts",
+    "src/protocol.ts",
+    "src/stream.ts",
+    "src/browser.ts",
+    "src/worker.ts",
+    "src/worker-assets.ts",
+    "src/testing.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
+}
