@@ -81,22 +81,22 @@
     "prepack": "pnpm run build",
     "test": "pnpm run generate:worker-assets && vitest run",
     "test:browser": "pnpm run build && playwright test",
-    "typecheck": "pnpm run generate:worker-assets && tsgo --noEmit && tsgo -p tsconfig.portable.json --noEmit"
+    "typecheck": "pnpm run generate:worker-assets && tsc --noEmit && tsc -p tsconfig.portable.json --noEmit"
   },
   "dependencies": {
     "ghostty-web": "0.4.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.0",
-    "@types/node": "^26.0.1",
-    "@typescript/native-preview": "7.0.0-dev.20260628.1",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.1.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "node-pty": "^1.1.0",
-    "oxfmt": "^0.56.0",
-    "oxlint": "^1.69.0",
-    "oxlint-tsgolint": "^0.23.0",
-    "tsdown": "^0.22.2",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.0"
+    "oxfmt": "^0.58.0",
+    "oxlint": "^1.73.0",
+    "oxlint-tsgolint": "^0.24.0",
+    "tsdown": "^0.22.4",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "node-pty": ">=1.0.0"
