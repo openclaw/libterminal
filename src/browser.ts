@@ -15,6 +15,13 @@ import {
   type TerminalMessageType as TerminalFrameMessageType,
 } from "./protocol.js";
 
+export {
+  createTerminalDefaultColorQueryResponder,
+  type TerminalDefaultColorQueryResponder,
+  type TerminalDefaultColorQueryResponderOptions,
+  type TerminalDefaultColors,
+} from "./browser-color-query.js";
+
 export type GhosttyRuntime = {
   ghostty: Ghostty;
   Terminal: typeof import("ghostty-web").Terminal;

@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Add a bounded, replay-safe browser responder for OSC 10-12 default-color
+  queries while Ghostty's WASM handler lacks those replies.
 - Harden release and runtime validation for portable typechecking, browser smoke
   coverage, Ghostty asset discovery, and local stdio cleanup.
 - Pin dependency automation to the public npm registry so public scoped packages

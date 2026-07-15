@@ -51,6 +51,31 @@ const terminal = await createGhosttyTerminal({
 await terminal.attach(output);
 ```
 
+`ghostty-web` 0.4.0 does not emit responses for OSC 10-12 default-color
+queries. Applications that write PTY output into the browser terminal can use
+the replay-safe compatibility responder until that support lands upstream:
+
+```ts
+import { createTerminalDefaultColorQueryResponder } from "@openclaw/libterminal/browser";
+
+const colorQueries = createTerminalDefaultColorQueryResponder({
+  getColors: () => ({
+    foreground: "#d7dae0",
+    background: "#0e1015",
+    cursor: "#ff5c5c",
+  }),
+  reply: (data) => pty.write(data),
+});
+
+colorQueries.primeFromReplay(replayedPrefix);
+colorQueries.observe(recoveredSuffix);
+colorQueries.observe(liveOutput);
+```
+
+When a replay contains an already-observed prefix and a newly recovered suffix,
+prime the responder with the prefix before observing the suffix. This prevents
+duplicate historical replies while preserving a query split across the seam.
+
 Use `GHOSTTY_ASSET_PATHS` and `readGhosttyAsset()` from the Node.js export to
 serve the pinned `ghostty-web` module, WASM, and browser-external shim under
 their canonical `/vendor` routes.
