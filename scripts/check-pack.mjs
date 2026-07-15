@@ -52,9 +52,9 @@ try {
       encoding: "utf8",
     }),
   );
-  /** @type {Array<{ filename: string; files: Array<{ path: string }> }>} */
+  /** @type {Array<{ filename: string; files: Array<{ path: string }> }> | Record<string, { filename: string; files: Array<{ path: string }> }>} */
   const pack = JSON.parse(output);
-  const [{ filename, files }] = pack;
+  const [{ filename, files }] = Array.isArray(pack) ? pack : Object.values(pack);
   const expected = [
     "dist/browser.d.ts",
     "dist/browser.js",
