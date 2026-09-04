@@ -88,11 +88,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.4.1",
     "@typescript/native": "npm:typescript@^7.0.2",
     "node-pty": "^1.1.0",
     "oxfmt": "^0.66.0",
-    "oxlint": "^1.80.0",
+    "oxlint": "^1.81.0",
     "oxlint-tsgolint": "^7.0.2001",
     "tsdown": "^0.22.14",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
@@ -109,5 +109,5 @@
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@11.25.0"
 }

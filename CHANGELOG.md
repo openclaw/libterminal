@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.4 - Unreleased
 
+### Changed
+
+- Refresh oxfmt, oxlint, Node.js types, and pnpm while preserving the two-day dependency cooldown. (#57, thanks @dependabot)
+
 ## 0.3.3 - 2026-08-31
 
 ### Changed
