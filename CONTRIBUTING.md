@@ -16,7 +16,8 @@ described in [SECURITY.md](SECURITY.md).
 
 ## Development Setup
 
-Use the Node.js and pnpm versions declared by the repository.
+Use Node.js 22.18+, 24.11+, or 26+ and the pnpm version declared by the repository.
+The development toolchain does not support Node.js 23 or 25.
 
 ```bash
 pnpm install

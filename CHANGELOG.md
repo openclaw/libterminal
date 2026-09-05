@@ -6,7 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
-- Refresh oxfmt, oxlint, Node.js types, and pnpm while preserving the two-day dependency cooldown. (#57, thanks @dependabot)
+- Refresh the build and test toolchain to tsdown 0.23, Vitest 5, and pnpm 12 while preserving the two-day dependency cooldown; development now requires Node.js 22.18+, 24.11+, or 26+.
+- Refresh oxfmt, oxlint, Node.js types, and transitive development dependencies. (#56, #57, thanks @dependabot)
 
 ## 0.3.3 - 2026-08-31
 

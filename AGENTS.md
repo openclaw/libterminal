@@ -13,7 +13,8 @@ behavior are public compatibility surfaces, not implementation details.
 - GitHub: `https://github.com/openclaw/libterminal`
 - npm: `https://www.npmjs.com/package/@openclaw/libterminal`
 - Default branch: `main`
-- Runtime: Node.js `>=22.13.0`
+- Runtime: Node.js `^22.18.0 || >=24.11.0`
+- Development toolchain: Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`
 - Package manager: `pnpm`; use the version declared by the repository
 - Human contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Security policy: [`SECURITY.md`](SECURITY.md)
