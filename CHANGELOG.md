@@ -4,6 +4,13 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.5 - Unreleased
 
+**Highlights:** Refresh browser validation and remove the development dependency audit warning.
+
+### Changed
+
+- Refresh the transitive nanoid dependency to fix its custom-generator infinite-loop advisory in the development toolchain.
+- Refresh browser validation to Playwright 1.63 and update pnpm to 12.3.4 with its pnpm 12-compatible setup action, preserving the two-day dependency cooldown.
+
 ## 0.3.4 - 2026-09-05
 
 ### Changed
