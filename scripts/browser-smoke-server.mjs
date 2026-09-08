@@ -1,17 +1,26 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import path from "node:path";
 import { readGhosttyAsset } from "../dist/node.js";
 
 const host = "127.0.0.1";
 const port = 4179;
-const files = new Map([
-  ["/dist/browser.js", { path: "dist/browser.js", contentType: "text/javascript; charset=utf-8" }],
-  ["/dist/index.js", { path: "dist/index.js", contentType: "text/javascript; charset=utf-8" }],
-  [
-    "/dist/protocol.js",
-    { path: "dist/protocol.js", contentType: "text/javascript; charset=utf-8" },
-  ],
-]);
+const distRoot = path.resolve("dist");
+
+/**
+ * @param {string} pathname
+ * @returns {string | null}
+ */
+function distScriptPath(pathname) {
+  if (!pathname.startsWith("/dist/") || !pathname.endsWith(".js")) {
+    return null;
+  }
+  const resolved = path.resolve(distRoot, pathname.slice("/dist/".length));
+  if (resolved !== distRoot && !resolved.startsWith(`${distRoot}${path.sep}`)) {
+    return null;
+  }
+  return resolved;
+}
 const html = `<!doctype html>
 <html>
   <head>
@@ -49,9 +58,9 @@ const server = createServer(async (request, response) => {
       send(response, html, "text/html; charset=utf-8");
       return;
     }
-    const file = files.get(pathname);
-    if (file) {
-      send(response, await readFile(file.path), file.contentType);
+    const distFile = distScriptPath(pathname);
+    if (distFile) {
+      send(response, await readFile(distFile), "text/javascript; charset=utf-8");
       return;
     }
     const asset = await readGhosttyAsset(pathname);

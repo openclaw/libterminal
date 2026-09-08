@@ -237,6 +237,133 @@ describe("TerminalHubClient", () => {
     expect(frames).toEqual(["new"]);
     client.close();
   });
+
+  it.each([1001, 1011, 4001])("preserves code %i when an injected transport accepts it", (code) => {
+    const socket = new TestTerminalHubSocket();
+    const close = vi.spyOn(socket, "close");
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+    });
+    client.connect();
+    socket.open();
+
+    client.close(code, "done");
+
+    expect(close.mock.calls).toEqual([[code, "done"]]);
+    expect(socket.readyState).toBe(3);
+  });
+
+  it.each([1011.5, 4001.5])(
+    "normalizes fractional close code %f before calling the transport",
+    (code) => {
+      const socket = new TestTerminalHubSocket();
+      const close = vi.spyOn(socket, "close");
+      const client = new TerminalHubClient({
+        url: "wss://terminal.example",
+        socketFactory: () => socket,
+      });
+      client.connect();
+      socket.open();
+
+      client.close(code, "done");
+
+      expect(close.mock.calls).toEqual([[1000, "done"]]);
+      expect(socket.readyState).toBe(3);
+    },
+  );
+
+  it("retries without arguments when both coded close attempts fail", () => {
+    const socket = new TestTerminalHubSocket();
+    const close = vi
+      .spyOn(socket, "close")
+      .mockImplementationOnce(() => {
+        throw new Error("first attempt");
+      })
+      .mockImplementationOnce(() => {
+        throw new Error("second attempt");
+      });
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+    });
+    client.connect();
+    socket.open();
+
+    client.close();
+
+    expect(close.mock.calls).toEqual([
+      [1000, "terminal hub closed"],
+      [1000, "terminal hub closed"],
+      [],
+    ]);
+    expect(socket.readyState).toBe(3);
+  });
+
+  it("reports a failed teardown and retains the socket for retry", () => {
+    const socket = new TestTerminalHubSocket();
+    const failure = new Error("close unavailable");
+    const errors: unknown[] = [];
+    const close = vi.spyOn(socket, "close").mockImplementation(() => {
+      throw failure;
+    });
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+      onError: (error) => errors.push(error),
+    });
+    client.connect();
+    socket.open();
+
+    client.close();
+
+    expect(close).toHaveBeenCalledTimes(3);
+    expect(errors).toEqual([failure]);
+    expect(client.isOpen).toBe(true);
+    close.mockRestore();
+    client.close();
+    expect(socket.readyState).toBe(3);
+    expect(client.isOpen).toBe(false);
+  });
+
+  it("closes the socket after native close rejects reserved codes", () => {
+    const socket = new NativeCloseSocket();
+    const errors: unknown[] = [];
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+      onError: (error) => errors.push(error),
+    });
+
+    client.connect();
+    socket.open();
+    client.close(1006);
+
+    expect(socket.readyState).toBe(3);
+    expect(socket.closeCalls.some((call) => call.code === 1000)).toBe(true);
+    expect(client.isOpen).toBe(false);
+    expect(errors).toEqual([]);
+  });
+
+  it("closes the socket after native close rejects an oversized reason", () => {
+    const socket = new NativeCloseSocket();
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+    });
+
+    client.connect();
+    socket.open();
+    client.close(1000, "x".repeat(200));
+
+    expect(socket.readyState).toBe(3);
+    const successful = socket.closeCalls.find(
+      (call) => new TextEncoder().encode(call.reason ?? "").byteLength <= 123,
+    );
+    expect(successful).toBeDefined();
+    expect(new TextEncoder().encode(successful?.reason ?? "").byteLength).toBeLessThanOrEqual(123);
+    expect(client.isOpen).toBe(false);
+  });
 });
 
 async function* chunks(...values: string[]): AsyncIterable<Uint8Array> {
@@ -324,6 +451,21 @@ class TestTerminalHubSocket implements TerminalHubWebSocket {
     for (const listener of this.closes) {
       listener({ code, reason });
     }
+  }
+}
+
+class NativeCloseSocket extends TestTerminalHubSocket {
+  readonly closeCalls: Array<{ code?: number; reason?: string }> = [];
+
+  close(code?: number, reason?: string): void {
+    this.closeCalls.push({ code, reason });
+    if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new Error(`InvalidAccessError: invalid close code ${code}`);
+    }
+    if (new TextEncoder().encode(reason ?? "").byteLength > 123) {
+      throw new Error("SyntaxError: close reason longer than 123 bytes");
+    }
+    super.close(code, reason);
   }
 }
 

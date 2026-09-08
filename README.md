@@ -96,6 +96,14 @@ const hub = new TerminalHubClient({
 hub.connect();
 ```
 
+`hub.close(code, reason)` sanitizes invalid close codes and limits the reason to
+123 UTF-8 bytes without splitting characters. Valid application codes and reason
+whitespace are preserved. Injected transports may accept protocol codes such as
+1001 that native browsers reject; these retain their existing behavior. If the
+socket rejects the close arguments, the hub
+retries with code 1000, then without arguments. If every attempt fails, `onError`
+receives the final error and the socket remains available for another close attempt.
+
 ## Node.js
 
 The built-in adapter dynamically imports the optional `node-pty` peer. Inject a

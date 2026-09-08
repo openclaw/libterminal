@@ -14,6 +14,7 @@ import {
   type TerminalFrameLimits,
   type TerminalMessageType as TerminalFrameMessageType,
 } from "./protocol.js";
+import { safeClose } from "./websocket-close.js";
 
 export {
   createTerminalDefaultColorQueryResponder,
@@ -281,12 +282,7 @@ export class TerminalHubClient {
     if (!socket || socket.readyState >= WEB_SOCKET_CLOSING) {
       return;
     }
-    try {
-      socket.close(code, reason);
-    } catch (error) {
-      this.socket = undefined;
-      this.reportError(error);
-    }
+    safeClose(socket, code, reason, (error) => this.reportError(error));
   }
 
   private handleOpen(socket: TerminalHubWebSocket): () => void {
