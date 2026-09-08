@@ -4,12 +4,16 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.5 - Unreleased
 
-**Highlights:** Refresh browser validation and remove the development dependency audit warning.
+**Highlights:** Close terminal hub connections reliably when callers supply invalid WebSocket close codes or oversized reasons.
+
+### Fixed
+
+- Prevent `TerminalHubClient.close()` from leaking sockets when native WebSocket rejects a close code or reason; preserve valid reason text and report final teardown failures. (#60, thanks @SebTardif)
 
 ### Changed
 
-- Refresh the transitive nanoid dependency to fix its custom-generator infinite-loop advisory in the development toolchain.
 - Refresh browser validation to Playwright 1.63 and update pnpm to 12.3.4 with its pnpm 12-compatible setup action, preserving the two-day dependency cooldown.
+- Refresh the transitive nanoid dependency to fix its custom-generator infinite-loop advisory in the development toolchain.
 
 ## 0.3.4 - 2026-09-05
 
