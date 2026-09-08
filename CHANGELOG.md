@@ -2,7 +2,7 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.5 - Unreleased
+## 0.3.5 - 2026-09-07
 
 **Highlights:** Close terminal hub connections reliably when callers supply invalid WebSocket close codes or oversized reasons.
 
