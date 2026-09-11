@@ -4,6 +4,11 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.6 - Unreleased
 
+### Changed
+
+- Refresh Node.js types, oxfmt, oxlint, and pnpm 12.4 while preserving the two-day dependency cooldown.
+- Update pinned CodeQL analysis actions to 4.38.0. (#62, thanks @dependabot)
+
 ## 0.3.5 - 2026-09-07
 
 **Highlights:** Close terminal hub connections reliably when callers supply invalid WebSocket close codes or oversized reasons.
