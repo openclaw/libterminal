@@ -4,9 +4,13 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.6 - Unreleased
 
+### Fixed
+
+- Keep dependency updates compatible with Dependabot by pinning pnpm 11.26.0 without the extra native-binary bootstrap download.
+
 ### Changed
 
-- Refresh Node.js types, oxfmt, oxlint, and pnpm 12.4 while preserving the two-day dependency cooldown.
+- Refresh Node.js types, oxfmt, and oxlint while preserving the two-day dependency cooldown.
 - Update pinned CodeQL analysis actions to 4.38.0. (#62, thanks @dependabot)
 
 ## 0.3.5 - 2026-09-07
