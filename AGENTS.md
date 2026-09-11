@@ -22,6 +22,10 @@ behavior are public compatibility surfaces, not implementation details.
 Read the nearest scoped `AGENTS.md` before changing files below this directory.
 `CLAUDE.md` is a compatibility symlink to this file; edit `AGENTS.md` only.
 
+Keep pnpm on the maintained 11.x JavaScript release line until Dependabot can
+bootstrap pnpm 12's native binary through its network proxy. Keep `packageManager`
+and the CI/release setup versions aligned.
+
 ## Architecture Boundaries
 
 - Treat exported types, protocol messages, event ordering, error shapes, and
