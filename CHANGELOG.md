@@ -14,6 +14,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Refresh Vite to 8.3, Lightning CSS to 1.33, and PostCSS to 8.5.28; deduplicate Rolldown while preserving the two-day dependency cooldown.
 - Refresh transitive build tooling while preserving the two-day dependency cooldown.
 - Validate Node.js 26 in CI alongside the existing Node.js 22 and 24 cross-platform checks.
 - Refresh Node.js types, oxfmt, and oxlint while preserving the two-day dependency cooldown.
