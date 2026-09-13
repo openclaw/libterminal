@@ -30,7 +30,15 @@ Use the smallest relevant command while iterating:
 ```bash
 pnpm build
 pnpm test
+pnpm test:coverage
 ```
+
+The Vitest 5 coverage command uses the matching V8 provider and reports all
+handwritten TypeScript under `src/`, including files not imported by tests.
+Only the generated Ghostty asset payload is excluded. Read the terminal summary,
+open `coverage/index.html`, or consume `coverage/coverage-summary.json`.
+The Node.js 24 Linux CI check also runs coverage. There are no configured coverage
+thresholds.
 
 Do not replace pnpm, regenerate the lockfile with another package manager, or
 edit generated output by hand.
