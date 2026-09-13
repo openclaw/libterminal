@@ -10,6 +10,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Refresh transitive build tooling while preserving the two-day dependency cooldown.
+- Validate Node.js 26 in CI alongside the existing Node.js 22 and 24 cross-platform checks.
 - Refresh Node.js types, oxfmt, and oxlint while preserving the two-day dependency cooldown.
 - Update pinned CodeQL analysis actions to 4.38.0. (#62, thanks @dependabot)
 

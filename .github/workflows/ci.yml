@@ -42,6 +42,9 @@ jobs:
           - ubuntu-latest
           - macos-15
           - windows-latest
+        include:
+          - node: 26
+            os: ubuntu-latest
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
