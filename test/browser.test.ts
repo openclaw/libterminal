@@ -140,7 +140,7 @@ describe("TerminalHubClient", () => {
       }),
     );
 
-    await waitForFrames(frames, 2);
+    await vi.waitFor(() => expect(frames).toHaveLength(2));
     expect(frames).toEqual([
       { sessionId: "IS-1", payload: "first" },
       { sessionId: "IS-2", payload: "second" },
@@ -182,7 +182,7 @@ describe("TerminalHubClient", () => {
     client.connect();
     sockets[0]?.open();
     sockets[0]?.emitClose();
-    await waitForSockets(sockets, 2);
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
 
     client.close();
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -213,7 +213,7 @@ describe("TerminalHubClient", () => {
     sockets[0]?.receive({ arrayBuffer: () => oldPayload });
     await Promise.resolve();
     sockets[0]?.emitClose();
-    await waitForSockets(sockets, 2);
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
     sockets[1]?.open();
     sockets[1]?.receive(
       encodeTerminalFrame({
@@ -501,23 +501,6 @@ class TestGhosttyFitAddon {
   observeResize(): void {}
 
   dispose(): void {}
-}
-
-async function waitForFrames(
-  frames: Array<{ sessionId: string; payload: string }>,
-  count: number,
-): Promise<void> {
-  for (let attempt = 0; attempt < 20 && frames.length < count; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve));
-  }
-  expect(frames).toHaveLength(count);
-}
-
-async function waitForSockets(sockets: TestTerminalHubSocket[], count: number): Promise<void> {
-  for (let attempt = 0; attempt < 20 && sockets.length < count; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve));
-  }
-  expect(sockets).toHaveLength(count);
 }
 
 function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import protocol from "../protocol/terminal-v2.json";
 import { LibterminalError } from "../src/index.js";
 import {
   decodeAckPayload,
@@ -14,13 +15,7 @@ import {
   tryDecodeTerminalFrame,
 } from "../src/protocol.js";
 
-const vectors = {
-  outputFrame: "435902140600000049532d31323304000000000102ff",
-  pingFrame: "4359023c0000000000000000",
-  subscribe: "0d00000000000000000000009000000029000000",
-  resize: "840000002b000000",
-  ack: "ffff0000",
-};
+const { vectors } = protocol;
 
 describe("terminal protocol v2", () => {
   it("matches the canonical output and ping frame vectors", () => {
