@@ -16,6 +16,77 @@ function redactTestToken(reason: string): string {
 }
 
 describe("bridgeWebSockets", () => {
+  it.each(["left", "right"])("discards %s payloads normalized after close", async (direction) => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    const bridge = bridgeWebSockets(left, right, { controlCheckIntervalMs: 0 });
+    let markStarted!: () => void;
+    let resolvePayload!: (value: ArrayBuffer) => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const payload = new Promise<ArrayBuffer>((resolve) => {
+      resolvePayload = resolve;
+    });
+    const source = direction === "left" ? left : right;
+    const target = direction === "left" ? right : left;
+    source.receive({
+      arrayBuffer: () => {
+        markStarted();
+        return payload;
+      },
+    });
+    await started;
+    bridge.close();
+    resolvePayload(new Uint8Array([42]).buffer);
+    await bridge.completed;
+    expect(target.sent).toEqual([]);
+    expect(bridge.rightOutputAcknowledgementBytes).toBe(0);
+  });
+
+  it("stays stopped after a pending control check even when socket close fails", async () => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    for (const socket of [left, right]) {
+      vi.spyOn(socket, "close").mockImplementation(() => {
+        throw new Error("close failed");
+      });
+    }
+    let allow!: (value: boolean) => void;
+    const control = new Promise<boolean>((resolve) => {
+      allow = resolve;
+    });
+    const bridge = bridgeWebSockets(left, right, {
+      canSendLeft: () => control,
+      controlCheckIntervalMs: 0,
+    });
+    const checked = bridge.revalidateControl();
+    left.receive("input");
+    await Promise.resolve();
+    bridge.close();
+    allow(true);
+
+    await bridge.completed;
+    await expect(checked).resolves.toBe(false);
+    expect(right.sent).toEqual([]);
+  });
+
+  it("does not start a control timer after setup has already failed", async () => {
+    vi.useFakeTimers();
+    try {
+      const bridge = bridgeWebSockets(new FakeWebSocket(), new FakeWebSocket(), {
+        canSendLeft: async () => true,
+        reconcileSubscription: () => {
+          throw new Error("setup failed");
+        },
+      });
+      await bridge.completed;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("forwards duplex messages in order", async () => {
     const left = new FakeWebSocket();
     const right = new FakeWebSocket();

@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Stop queued Worker bridge forwarding after teardown, including pending payload conversions and control checks, and avoid starting control timers after failed setup.
 - Keep replacement fanout subscriptions alive when a stale handle or overflow callback closes an earlier subscription with the same ID.
 - Keep dependency updates compatible with Dependabot by pinning pnpm 11.26.0 without the extra native-binary bootstrap download.
 
