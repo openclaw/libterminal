@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { abortedResult, abortPromise } from "./abort.js";
 import { GHOSTTY_ASSET_PATHS, type GhosttyAsset } from "./ghostty-assets.js";
 import {
   assertTerminalSize,
@@ -434,26 +435,6 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw signal.reason ?? new Error("The operation was aborted");
   }
-}
-
-const abortedResult = Symbol("aborted");
-
-function abortPromise(
-  signal?: AbortSignal,
-): { promise: Promise<typeof abortedResult>; dispose(): void } | undefined {
-  if (!signal) {
-    return undefined;
-  }
-  if (signal.aborted) {
-    return { promise: Promise.resolve(abortedResult), dispose: () => undefined };
-  }
-  let resolveAbort: (value: typeof abortedResult) => void = noop;
-  const promise = new Promise<typeof abortedResult>((resolve) => {
-    resolveAbort = resolve;
-  });
-  const abort = () => resolveAbort(abortedResult);
-  signal.addEventListener("abort", abort, { once: true });
-  return { promise, dispose: () => signal.removeEventListener("abort", abort) };
 }
 
 function noop(): void {}
