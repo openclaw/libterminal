@@ -101,8 +101,8 @@ export function bridgeWebSockets(
   };
 
   const close = (code = 1000, reason = "bridge closed") => {
-    closePair(left, right, code, sanitizeReason(reason));
     stop();
+    closePair(left, right, code, sanitizeReason(reason));
   };
 
   const fail = (error: unknown) => {
@@ -133,26 +133,35 @@ export function bridgeWebSockets(
     }
     try {
       options.reconcileSubscription?.();
+      if (stopped) {
+        return false;
+      }
       controlCheckInFlight ??= verifyControl().finally(() => {
         controlCheckInFlight = undefined;
       });
-      return await controlCheckInFlight;
+      const allowed = await controlCheckInFlight;
+      return !stopped && allowed;
     } catch (error) {
       fail(error);
       return false;
     }
   };
 
+  const canForward = () => !stopped && pairIsOpen(left, right);
+
   function onLeftMessage(event: WebSocketMessageEventLike): void {
     leftInputQueue = leftInputQueue
       .then(async () => {
-        if (!pairIsOpen(left, right)) {
+        if (!canForward()) {
           return;
         }
-        if (!leftCanSend || !(await revalidateControl())) {
+        if (!leftCanSend || !(await revalidateControl()) || !canForward()) {
           return;
         }
         const forwarded = await normalizeWebSocketMessageData(event.data);
+        if (!canForward()) {
+          return;
+        }
         const acknowledgedBytes = options.forwardRightOutputAcknowledgements
           ? decodeOutputAcknowledgement(forwarded)
           : null;
@@ -171,10 +180,13 @@ export function bridgeWebSockets(
   function onRightMessage(event: WebSocketMessageEventLike): void {
     rightOutputQueue = rightOutputQueue
       .then(async () => {
-        if (!pairIsOpen(left, right)) {
+        if (!canForward()) {
           return;
         }
         const forwarded = await normalizeWebSocketMessageData(event.data);
+        if (!canForward()) {
+          return;
+        }
         left.send(forwarded);
         if (options.forwardRightOutputAcknowledgements) {
           outstandingRightBytes += terminalMessageByteLength(forwarded);
@@ -212,7 +224,7 @@ export function bridgeWebSockets(
 
   if (options.canSendLeft) {
     void revalidateControl();
-    if (controlCheckIntervalMs > 0) {
+    if (!stopped && controlCheckIntervalMs > 0) {
       controlTimer = setInterval(() => void revalidateControl(), controlCheckIntervalMs);
     }
   }

@@ -149,6 +149,10 @@ await bridge.completed;
 The product remains responsible for authenticating both sockets and deciding
 which capabilities grant control.
 
+Closing the bridge stops forwarding immediately. `completed` still waits for
+already-started message conversions to settle, discarding their results after
+teardown.
+
 Use the optional Worker asset export to serve the pinned Ghostty module, WASM,
 and browser-external shim without an application-local asset generator. The
 product owns the route, cache policy, and security headers.
