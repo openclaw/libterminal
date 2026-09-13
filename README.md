@@ -34,6 +34,12 @@ pnpm add node-pty
 - `@openclaw/libterminal/worker-assets`: optional Worker-safe Ghostty asset payloads
 - `@openclaw/libterminal/testing`: deterministic terminal test doubles
 
+## Streaming
+
+`TerminalFanout` provides bounded replay and per-subscriber output queues. Close
+each subscription when its consumer finishes. IDs can be reused after closing;
+an old subscription handle cannot close a later subscription with the same ID.
+
 ## Browser
 
 Ghostty terminals default to read-only. The application owns authorization,

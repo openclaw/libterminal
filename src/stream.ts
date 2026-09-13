@@ -110,7 +110,9 @@ export class TerminalFanout {
       return;
     }
     this.replay.append(bytes);
-    for (const [subscriberId, subscriber] of this.subscribers) {
+    // Callbacks can replace subscribers during publication.
+    const subscribers = [...this.subscribers];
+    for (const [subscriberId, subscriber] of subscribers) {
       const droppedBytes = subscriber.enqueue(bytes, this.slowSubscriberPolicy);
       if (droppedBytes === 0) {
         continue;
@@ -122,7 +124,7 @@ export class TerminalFanout {
         policy: this.slowSubscriberPolicy,
       });
       if (this.slowSubscriberPolicy === "disconnect") {
-        this.removeSubscriber(subscriberId, "subscriber buffer overflow");
+        this.removeSubscriber(subscriberId, subscriber, "subscriber buffer overflow");
       }
     }
   }
@@ -145,7 +147,7 @@ export class TerminalFanout {
     return {
       id,
       [Symbol.asyncIterator]: () => subscriber,
-      close: (reason?: string) => this.removeSubscriber(id, reason),
+      close: (reason?: string) => this.removeSubscriber(id, subscriber, reason),
     };
   }
 
@@ -154,15 +156,14 @@ export class TerminalFanout {
       return;
     }
     this.closed = true;
-    for (const subscriberId of this.subscribers.keys()) {
-      this.removeSubscriber(subscriberId, reason);
+    for (const [subscriberId, subscriber] of this.subscribers) {
+      this.removeSubscriber(subscriberId, subscriber, reason);
     }
     this.replay.clear();
   }
 
-  private removeSubscriber(id: string, reason?: string): void {
-    const subscriber = this.subscribers.get(id);
-    if (!subscriber) {
+  private removeSubscriber(id: string, subscriber: SubscriberQueue, reason?: string): void {
+    if (this.subscribers.get(id) !== subscriber) {
       return;
     }
     this.subscribers.delete(id);

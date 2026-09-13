@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Keep replacement fanout subscriptions alive when a stale handle or overflow callback closes an earlier subscription with the same ID.
 - Keep dependency updates compatible with Dependabot by pinning pnpm 11.26.0 without the extra native-binary bootstrap download.
 
 ### Changed
