@@ -171,84 +171,114 @@ export async function attachLocalStdio(
   const aborted = abortPromise(options?.signal);
   const previousRaw = stdin.isTTY ? stdin.isRaw : false;
   const previousFlowing = stdin.readableFlowing;
-  let rejectInputFailure: (error: unknown) => void = noop;
-  const inputFailure = new Promise<never>((_, reject) => {
-    rejectInputFailure = reject;
+  let rejectFailure!: (error: unknown) => void;
+  const failure = new Promise<never>((_, reject) => {
+    rejectFailure = reject;
   });
-  void inputFailure.catch(noop);
+  void failure.catch(noop);
+  const waitForOperation = <T>(operation: Promise<T>): Promise<T | typeof abortedResult> =>
+    aborted
+      ? Promise.race([aborted.promise, operation, failure])
+      : Promise.race([operation, failure]);
+  const waitForCleanup = <T>(operation: Promise<T>): Promise<T | typeof abortedResult> =>
+    aborted ? Promise.race([aborted.promise, operation]) : operation;
   let pendingInput = Promise.resolve();
   const writeInput = (data: Buffer | string) => {
     const bytes = typeof data === "string" ? textEncoder.encode(data) : data;
     pendingInput = pendingInput.then(async () => {
-      await terminal.write?.(bytes);
+      if (!options?.signal?.aborted) {
+        await terminal.write?.(bytes);
+      }
     });
-    void pendingInput.catch(rejectInputFailure);
+    void pendingInput.catch(rejectFailure);
   };
-  let rejectResizeFailure: (error: unknown) => void = noop;
-  const resizeFailure = new Promise<never>((_, reject) => {
-    rejectResizeFailure = reject;
-  });
-  void resizeFailure.catch(() => undefined);
   const resize = async () => {
+    if (options?.signal?.aborted) {
+      return;
+    }
     const size = terminalSize(stdout);
     await terminal.resize?.(size);
-    options?.onResize?.(size);
+    if (!options?.signal?.aborted) {
+      options?.onResize?.(size);
+    }
   };
   let pendingResize = Promise.resolve();
   const handleResize = () => {
     pendingResize = pendingResize.then(resize);
-    void pendingResize.catch(rejectResizeFailure);
+    void pendingResize.catch(rejectFailure);
   };
   const abort = () => void terminal.close("aborted").catch(() => undefined);
+  let stdoutErrorSeen = false;
+  let retainingOutputError = false;
+  const handleStdoutError = (error: unknown) => {
+    stdoutErrorSeen = true;
+    rejectFailure(error);
+    if (retainingOutputError) {
+      releasePendingOutputError();
+    }
+  };
+  function releasePendingOutputError(): void {
+    stdout.off("error", handleStdoutError);
+    stdout.off("close", releasePendingOutputError);
+  }
 
   if (stdin.isTTY) {
     stdin.setRawMode(true);
     stdin.resume();
   }
-  const handleStdinError = (error: unknown) => {
-    rejectInputFailure(error);
-  };
-  const handleStdoutError = (error: unknown) => {
-    rejectInputFailure(error);
-  };
   stdin.on("data", writeInput);
-  stdin.on("error", handleStdinError);
+  stdin.on("error", rejectFailure);
   stdout.on("resize", handleResize);
   stdout.on("error", handleStdoutError);
   options?.signal?.addEventListener("abort", abort, { once: true });
 
   let outputCompleted = false;
+  let pendingOutput: Promise<void> | undefined;
   try {
-    await resize();
+    pendingResize = resize();
+    if ((await waitForOperation(pendingResize)) === abortedResult) {
+      return;
+    }
     for (;;) {
-      const next = aborted
-        ? await Promise.race([output.next(), aborted.promise, resizeFailure, inputFailure])
-        : await Promise.race([output.next(), resizeFailure, inputFailure]);
+      const next = await waitForOperation(output.next());
       if (next === abortedResult || next.done) {
         outputCompleted = next !== abortedResult;
         break;
       }
-      const written = writeToStream(stdout, next.value);
-      void written.catch(noop);
-      await Promise.race([written, inputFailure]);
+      pendingOutput = writeToStream(stdout, next.value);
+      if ((await waitForOperation(pendingOutput)) === abortedResult) {
+        break;
+      }
+      pendingOutput = undefined;
     }
   } finally {
-    aborted?.dispose();
     stdin.off("data", writeInput);
-    stdin.off("error", handleStdinError);
+    stdin.off("error", rejectFailure);
     stdout.off("resize", handleResize);
-    stdout.off("error", handleStdoutError);
+    if (pendingOutput && options?.signal?.aborted) {
+      // A write callback can fail before the stream emits its error or close event.
+      retainingOutputError = true;
+      stdout.once("close", releasePendingOutputError);
+      void pendingOutput.then(releasePendingOutputError, () => {
+        if (stdoutErrorSeen) {
+          releasePendingOutputError();
+        }
+      });
+    } else {
+      stdout.off("error", handleStdoutError);
+    }
     try {
       if (!outputCompleted) {
         const returned = output.return?.();
         if (options?.signal?.aborted) {
           void Promise.resolve(returned).catch(noop);
         } else {
-          await returned;
+          await waitForCleanup(Promise.resolve(returned));
         }
       }
-      await pendingResize;
+      await waitForCleanup(pendingResize);
     } finally {
+      aborted?.dispose();
       options?.signal?.removeEventListener("abort", abort);
       if (stdin.isTTY) {
         stdin.setRawMode(previousRaw);
