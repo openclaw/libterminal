@@ -68,6 +68,10 @@ jobs:
       - name: Check
         run: pnpm check
 
+      - name: Report coverage
+        if: matrix.node == 24 && matrix.os == 'ubuntu-latest'
+        run: pnpm test:coverage
+
   browser-smoke:
     name: Ghostty browser smoke
     runs-on: ubuntu-latest

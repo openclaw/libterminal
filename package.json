@@ -81,6 +81,7 @@
     "prepack": "pnpm run build",
     "test": "pnpm run generate:worker-assets && vitest run",
     "test:browser": "pnpm run build && playwright test",
+    "test:coverage": "pnpm run test --coverage",
     "typecheck": "pnpm run generate:worker-assets && tsc --noEmit && tsc -p tsconfig.portable.json --noEmit"
   },
   "dependencies": {
@@ -91,6 +92,7 @@
     "@types/node": "^26.5.1",
     "@types/ws": "^8.18.1",
     "@typescript/native": "npm:typescript@^7.0.2",
+    "@vitest/coverage-v8": "^5.0.0",
     "node-pty": "^1.1.0",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
