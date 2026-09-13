@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Stop buffered browser stream output as soon as attachment cancellation is observed, including already-aborted signals and ready-read races.
 - Restore stdio promptly when aborting pending writes, resizes, or cleanup; suppress queued input after abort and handle late stdout write errors.
 - Stop queued Worker bridge forwarding after teardown, including pending payload conversions and control checks, and avoid starting control timers after failed setup.
 - Keep replacement fanout subscriptions alive when a stale handle or overflow callback closes an earlier subscription with the same ID.

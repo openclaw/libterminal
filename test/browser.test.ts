@@ -54,6 +54,53 @@ describe("createGhosttyTerminal", () => {
 });
 
 describe("attachTerminalStream", () => {
+  it.each(["before attachment", "while a read resolves"])(
+    "does not write buffered output aborted %s",
+    async (when) => {
+      const controller = new AbortController();
+      const queued = [new Uint8Array([1]), new Uint8Array([2])];
+      const returned = vi.fn(async () => ({ done: true as const, value: undefined }));
+      const source = {
+        [Symbol.asyncIterator]: () => ({
+          next: async () =>
+            queued.length
+              ? { done: false as const, value: queued.shift()! }
+              : { done: true as const, value: undefined },
+          return: returned,
+        }),
+      };
+      const write = vi.fn();
+      if (when === "before attachment") {
+        controller.abort();
+      }
+      const attached = attachTerminalStream({ write }, source, controller.signal);
+      controller.abort();
+      await attached;
+      expect(write).not.toHaveBeenCalled();
+      expect(returned).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("does not read another chunk after a write callback aborts", async () => {
+    const controller = new AbortController();
+    const queued = [new Uint8Array([1]), new Uint8Array([2])];
+    const next = vi.fn(async () =>
+      queued.length
+        ? { done: false as const, value: queued.shift()! }
+        : { done: true as const, value: undefined },
+    );
+    const returned = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const write = vi.fn(() => controller.abort());
+    await attachTerminalStream(
+      { write },
+      { [Symbol.asyncIterator]: () => ({ next, return: returned }) },
+      controller.signal,
+    );
+    expect(write).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledOnce();
+    expect(returned).toHaveBeenCalledOnce();
+  });
+
   it("writes terminal byte chunks in order", async () => {
     const writes: string[] = [];
     await attachTerminalStream(
