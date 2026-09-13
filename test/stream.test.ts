@@ -26,6 +26,62 @@ describe("BoundedReplayBuffer", () => {
 });
 
 describe("TerminalFanout", () => {
+  it("does not let an old handle close a replacement with the same id", async () => {
+    const fanout = new TerminalFanout();
+    const old = fanout.subscribe("viewer");
+    old.close();
+    const replacement = fanout.subscribe("viewer");
+
+    old.close();
+    expect(fanout.subscriberCount).toBe(1);
+    fanout.publish(bytes("live"));
+    expect((await replacement[Symbol.asyncIterator]().next()).value).toEqual(bytes("live"));
+    replacement.close();
+    expect(fanout.subscriberCount).toBe(0);
+  });
+
+  it("preserves a replacement created by the overflow callback", () => {
+    const fanout = new TerminalFanout({
+      replayBytes: 0,
+      subscriberBufferBytes: 4,
+      onEvent: (event) => {
+        if (event.type === "subscriber-overflow") {
+          old.close();
+          fanout.subscribe("viewer");
+        }
+      },
+    });
+    const old = fanout.subscribe("viewer");
+    fanout.publish(bytes("1234"));
+    fanout.publish(bytes("5"));
+
+    expect(fanout.subscriberCount).toBe(1);
+    fanout.close();
+  });
+
+  it("does not publish an oversized chunk to reentrant replacements", async () => {
+    let overflows = 0;
+    const fanout = new TerminalFanout({
+      replayBytes: 0,
+      subscriberBufferBytes: 4,
+      onEvent: (event) => {
+        if (event.type === "subscriber-overflow") {
+          expect(++overflows).toBe(1);
+          subscription.close();
+          subscription = fanout.subscribe("viewer", { replay: false });
+        }
+      },
+    });
+    let subscription = fanout.subscribe("viewer");
+
+    fanout.publish(bytes("12345"));
+    expect(overflows).toBe(1);
+    expect(fanout.subscriberCount).toBe(1);
+    fanout.publish(bytes("ok"));
+    expect((await subscription[Symbol.asyncIterator]().next()).value).toEqual(bytes("ok"));
+    fanout.close();
+  });
+
   it("replays output and fans out new chunks", async () => {
     const fanout = new TerminalFanout({ replayBytes: 8, subscriberBufferBytes: 8 });
     fanout.publish(bytes("before"));
