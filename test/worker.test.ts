@@ -1,13 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { FakeWebSocket } from "../src/testing.js";
 import {
   bridgeWebSockets,
   decodeOutputAcknowledgement,
   normalizeWebSocketMessageData,
-  WEB_SOCKET_OPEN,
-  type WebSocketCloseEventLike,
-  type WebSocketLike,
-  type WebSocketMessageEventLike,
-  type WebSocketPayload,
 } from "../src/worker.js";
 
 function acceptsNativeWebSocket(socket: WebSocket): void {
@@ -24,9 +20,9 @@ describe("bridgeWebSockets", () => {
     const left = new FakeWebSocket();
     const right = new FakeWebSocket();
     const bridge = bridgeWebSockets(left, right, { controlCheckIntervalMs: 0 });
-    left.emitMessage("one");
-    left.emitMessage("two");
-    right.emitMessage("three");
+    left.receive("one");
+    left.receive("two");
+    right.receive("three");
     await vi.waitFor(() => {
       expect(right.sent).toEqual(["one", "two"]);
       expect(left.sent).toEqual(["three"]);
@@ -52,7 +48,7 @@ describe("bridgeWebSockets", () => {
       completed = true;
     });
 
-    right.emitMessage({
+    right.receive({
       arrayBuffer: () => {
         markStarted();
         return payload;
@@ -105,9 +101,9 @@ describe("bridgeWebSockets", () => {
       controlCheckIntervalMs: 0,
       forwardRightOutputAcknowledgements: true,
     });
-    right.emitMessage("hello");
+    right.receive("hello");
     await vi.waitFor(() => expect(bridge.rightOutputAcknowledgementBytes).toBe(5));
-    left.emitMessage('{"type":"ack","bytes":5}');
+    left.receive('{"type":"ack","bytes":5}');
     await vi.waitFor(() => expect(right.sent).toEqual(['{"type":"ack","bytes":5}']));
     expect(bridge.rightOutputAcknowledgementBytes).toBe(0);
   });
@@ -173,68 +169,5 @@ describe("Worker message helpers", () => {
     expect(decodeOutputAcknowledgement("not json")).toBeNull();
   });
 });
-
-class FakeWebSocket implements WebSocketLike {
-  readyState = WEB_SOCKET_OPEN;
-  readonly sent: WebSocketPayload[] = [];
-  closed?: { code?: number; reason?: string };
-  private readonly messages = new Set<(event: WebSocketMessageEventLike) => void>();
-  private readonly closes = new Set<(event: WebSocketCloseEventLike) => void>();
-  private readonly errors = new Set<() => void>();
-
-  send(data: WebSocketPayload): void {
-    this.sent.push(data);
-  }
-
-  close(code?: number, reason?: string): void {
-    this.closed = { code, reason };
-    this.readyState = 3;
-  }
-
-  addEventListener(
-    type: "message" | "close" | "error",
-    listener:
-      | ((event: WebSocketMessageEventLike) => void)
-      | ((event: WebSocketCloseEventLike) => void)
-      | (() => void),
-  ): void {
-    if (type === "message") {
-      this.messages.add(listener as (event: WebSocketMessageEventLike) => void);
-    } else if (type === "close") {
-      this.closes.add(listener as (event: WebSocketCloseEventLike) => void);
-    } else {
-      this.errors.add(listener as () => void);
-    }
-  }
-
-  removeEventListener(
-    type: "message" | "close" | "error",
-    listener:
-      | ((event: WebSocketMessageEventLike) => void)
-      | ((event: WebSocketCloseEventLike) => void)
-      | (() => void),
-  ): void {
-    if (type === "message") {
-      this.messages.delete(listener as (event: WebSocketMessageEventLike) => void);
-    } else if (type === "close") {
-      this.closes.delete(listener as (event: WebSocketCloseEventLike) => void);
-    } else {
-      this.errors.delete(listener as () => void);
-    }
-  }
-
-  emitMessage(data: unknown): void {
-    for (const listener of this.messages) {
-      listener({ data });
-    }
-  }
-
-  emitClose(code: number, reason: string): void {
-    this.readyState = 3;
-    for (const listener of this.closes) {
-      listener({ code, reason });
-    }
-  }
-}
 
 function noop(): void {}

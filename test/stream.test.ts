@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { BatchPublisher, BoundedReplayBuffer, TerminalFanout } from "../src/stream.js";
+import { terminalBytes as bytes, terminalText as text } from "../src/testing.js";
 
 describe("BoundedReplayBuffer", () => {
   it("retains only the newest bounded output", () => {
@@ -123,18 +124,3 @@ describe("BatchPublisher", () => {
     await expect(publisher.flush()).rejects.toBe(sinkError);
   });
 });
-
-function bytes(value: string): Uint8Array {
-  return new TextEncoder().encode(value);
-}
-
-function text(chunks: Uint8Array[]): string {
-  return new TextDecoder().decode(
-    chunks.reduce((joined, chunk) => {
-      const next = new Uint8Array(joined.byteLength + chunk.byteLength);
-      next.set(joined);
-      next.set(chunk, joined.byteLength);
-      return next;
-    }, new Uint8Array()),
-  );
-}
