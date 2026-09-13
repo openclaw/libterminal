@@ -57,6 +57,8 @@ const terminal = await createGhosttyTerminal({
 await terminal.attach(output);
 ```
 
+Aborting an attached stream stops buffered output as well as future reads.
+
 `ghostty-web` 0.4.0 does not emit responses for OSC 10-12 default-color
 queries. Applications that write PTY output into the browser terminal can use
 the replay-safe compatibility responder until that support lands upstream:

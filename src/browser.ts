@@ -142,11 +142,17 @@ export async function attachTerminalStream(
   let failure: unknown;
   try {
     for (;;) {
+      if (signal?.aborted) {
+        return;
+      }
       const result = aborted
         ? await Promise.race([iterator.next(), aborted.promise])
         : await iterator.next();
       if (result === abortedResult || result.done) {
         completed = result !== abortedResult;
+        return;
+      }
+      if (signal?.aborted) {
         return;
       }
       target.write(result.value);
