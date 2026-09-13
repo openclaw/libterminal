@@ -1,4 +1,6 @@
 import { EventEmitter } from "node:events";
+import { PassThrough, Writable } from "node:stream";
+import { setImmediate } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
 import {
   attachLocalStdio,
@@ -94,6 +96,245 @@ describe("spawnLocalPty", () => {
 });
 
 describe("attachLocalStdio", () => {
+  it.each(["iterator return", "initial resize", "queued resize"])(
+    "awaits %s cleanup after a non-abort failure",
+    async (phase) => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let startCleanup!: () => void;
+      let finishCleanup!: () => void;
+      const started = new Promise<void>((resolve) => {
+        startCleanup = resolve;
+      });
+      const cleanup = new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      });
+      let resizeCalls = 0;
+      const attached = attachLocalStdio(
+        {
+          output: {
+            [Symbol.asyncIterator]: () => ({
+              next: () => new Promise<IteratorResult<Uint8Array>>(() => {}),
+              return: async () => {
+                if (phase === "iterator return") {
+                  startCleanup();
+                  await cleanup;
+                }
+                return { done: true, value: undefined };
+              },
+            }),
+          },
+          close: async () => {},
+          resize: async () => {
+            resizeCalls += 1;
+            if (phase === "initial resize" || (phase === "queued resize" && resizeCalls > 1)) {
+              startCleanup();
+              await cleanup;
+            }
+          },
+        },
+        {
+          stdin: stdin as unknown as NodeJS.ReadStream,
+          stdout: stdout as unknown as NodeJS.WriteStream,
+        },
+      );
+      let settled = false;
+      void attached.catch(() => {
+        settled = true;
+      });
+      if (phase === "queued resize") {
+        stdout.emit("resize");
+      }
+      if (phase !== "iterator return") {
+        await started;
+      }
+      const error = new Error("stdin failed");
+      stdin.emit("error", error);
+      await started;
+      try {
+        await setImmediate();
+        expect(settled).toBe(false);
+      } finally {
+        finishCleanup();
+        stdin.destroy();
+        stdout.destroy();
+      }
+      await expect(attached).rejects.toBe(error);
+    },
+  );
+
+  it("handles a late stdout error after abort until the pending write settles", async () => {
+    const controller = new AbortController();
+    const stdin = new PassThrough();
+    let markStarted!: () => void;
+    let finish!: (error?: Error | null) => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const stdout = new Writable({
+      write(_chunk, _encoding, callback) {
+        finish = callback;
+        markStarted();
+      },
+    });
+    const attached = attachLocalStdio(
+      { output: singleOutput(), close: async () => {} },
+      {
+        signal: controller.signal,
+        stdin: stdin as unknown as NodeJS.ReadStream,
+        stdout: stdout as unknown as NodeJS.WriteStream,
+      },
+    );
+    await started;
+    controller.abort();
+    await attached;
+    expect(stdout.listenerCount("error")).toBe(1);
+    finish(new Error("late EPIPE"));
+    await setImmediate();
+    expect(stdout.listenerCount("error")).toBe(0);
+    stdin.destroy();
+    stdout.destroy();
+  });
+
+  it("honors abort while draining a resize after output has ended", async () => {
+    const controller = new AbortController();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
+    let finishResize!: () => void;
+    let markResize!: () => void;
+    const resizing = new Promise<void>((resolve) => {
+      markResize = resolve;
+    });
+    let calls = 0;
+    const onResize = vi.fn();
+    const attached = attachLocalStdio(
+      {
+        output: {
+          [Symbol.asyncIterator]: () => ({
+            next: () =>
+              new Promise((resolve) => {
+                completeOutput = resolve;
+              }),
+          }),
+        },
+        close: async () => {},
+        resize: async () => {
+          if (++calls > 1) {
+            markResize();
+            await new Promise<void>((resolve) => {
+              finishResize = resolve;
+            });
+          }
+        },
+      },
+      {
+        signal: controller.signal,
+        stdin: stdin as unknown as NodeJS.ReadStream,
+        stdout: stdout as unknown as NodeJS.WriteStream,
+        onResize,
+      },
+    );
+    await vi.waitFor(() => expect(completeOutput).toBeTypeOf("function"));
+    stdout.emit("resize");
+    await resizing;
+    completeOutput({ done: true, value: undefined });
+    await vi.waitFor(() => expect(stdout.listenerCount("resize")).toBe(0));
+    controller.abort();
+    await attached;
+    finishResize();
+    await setImmediate();
+    expect(onResize).toHaveBeenCalledOnce();
+    stdin.destroy();
+    stdout.destroy();
+  });
+
+  it("does not forward queued stdin after abort", async () => {
+    const controller = new AbortController();
+    const stdio = testStdio();
+    let finishWrite!: () => void;
+    let markWrite!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      markWrite = resolve;
+    });
+    const write = vi.fn(async () => {
+      markWrite();
+      await new Promise<void>((resolve) => {
+        finishWrite = resolve;
+      });
+    });
+    const attached = attachLocalStdio(
+      { output: neverOutput(), write, close: async () => {} },
+      { signal: controller.signal, stdin: stdio.stdin, stdout: stdio.stdout },
+    );
+    stdio.input("first");
+    stdio.input("second");
+    await writing;
+    controller.abort();
+    await attached;
+    finishWrite();
+    await setImmediate();
+    expect(write).toHaveBeenCalledOnce();
+  });
+
+  it.each(["output write", "initial resize", "queued resize"])(
+    "restores stdio on abort during a pending %s",
+    async (phase) => {
+      const controller = new AbortController();
+      const stdin = new PassThrough();
+      let markStarted!: () => void;
+      let finish!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const stdout = new Writable({
+        write(_chunk, _encoding, callback) {
+          finish = callback;
+          markStarted();
+        },
+      });
+      let resizeCalls = 0;
+      const close = vi.fn(async () => {});
+      const attached = attachLocalStdio(
+        {
+          output: phase === "output write" ? singleOutput() : neverOutput(),
+          close,
+          resize: async () => {
+            resizeCalls += 1;
+            if (phase === "output write" || (phase === "queued resize" && resizeCalls === 1)) {
+              return;
+            }
+            markStarted();
+            await new Promise<void>((resolve) => {
+              finish = resolve;
+            });
+          },
+        },
+        {
+          signal: controller.signal,
+          stdin: stdin as unknown as NodeJS.ReadStream,
+          stdout: stdout as unknown as NodeJS.WriteStream,
+        },
+      );
+      if (phase === "queued resize") {
+        stdout.emit("resize");
+      }
+      await started;
+      controller.abort();
+      try {
+        await attached;
+        expect(close).toHaveBeenCalledWith("aborted");
+        expect(stdin.listenerCount("data")).toBe(0);
+        expect(stdout.listenerCount("resize")).toBe(0);
+        expect(stdin.readableFlowing).toBe(false);
+      } finally {
+        finish();
+        stdin.destroy();
+        stdout.destroy();
+      }
+    },
+  );
+
   it("honors a signal that is already aborted before touching stdio", async () => {
     const controller = new AbortController();
     controller.abort();
@@ -190,7 +431,10 @@ describe("attachLocalStdio", () => {
     const removed: string[] = [];
     let paused = false;
     let inputListener: (data: Buffer) => void = noop;
-    let completeOutput: (result: IteratorResult<Uint8Array>) => void = noop;
+    let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
+    const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve) => {
+      completeOutput = resolve;
+    });
     let resolveWrite: () => void = noop;
     let writeStarted: () => void = noop;
     const writeStartedPromise = new Promise<void>((resolve) => {
@@ -221,10 +465,7 @@ describe("attachLocalStdio", () => {
     } as unknown as NodeJS.WriteStream;
     const output = {
       [Symbol.asyncIterator]: () => ({
-        next: () =>
-          new Promise<IteratorResult<Uint8Array>>((resolve) => {
-            completeOutput = resolve;
-          }),
+        next: () => outputResult,
       }),
     };
     const attached = attachLocalStdio(
@@ -500,7 +741,10 @@ describe("attachLocalStdio", () => {
     let resizeCalls = 0;
     let resolveInitialResize: () => void = noop;
     let rejectLaterResize: (error: Error) => void = noop;
-    let completeOutput: (result: IteratorResult<Uint8Array>) => void = noop;
+    let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
+    const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve) => {
+      completeOutput = resolve;
+    });
     const initialResize = new Promise<void>((resolve) => {
       resolveInitialResize = resolve;
     });
@@ -509,10 +753,7 @@ describe("attachLocalStdio", () => {
     });
     const output = {
       [Symbol.asyncIterator]: () => ({
-        next: () =>
-          new Promise<IteratorResult<Uint8Array>>((resolve) => {
-            completeOutput = resolve;
-          }),
+        next: () => outputResult,
       }),
     };
     const stdin = {
@@ -614,6 +855,10 @@ function neverOutput(): AsyncIterable<Uint8Array> {
       next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
     }),
   };
+}
+
+async function* singleOutput(): AsyncIterable<Uint8Array> {
+  yield new Uint8Array([42]);
 }
 
 function testStdio(): {

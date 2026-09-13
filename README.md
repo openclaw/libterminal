@@ -130,6 +130,10 @@ await attachLocalStdio(terminal);
 PTY output queues are bounded by default. Raw stdin mode is restored when the
 session ends, errors, or aborts.
 
+Aborting a stdio attachment restores it without waiting for a pending write or
+resize. Caller-owned streams stay open, and late errors from an outstanding
+stdout write remain handled until that write settles.
+
 ## Workers
 
 The Worker bridge forwards both directions in order and can revalidate control
