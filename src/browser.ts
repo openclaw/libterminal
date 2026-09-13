@@ -5,6 +5,7 @@ import type {
   ITerminalOptions,
   Terminal,
 } from "ghostty-web";
+import { abortedResult, abortPromise } from "./abort.js";
 import { assertTerminalSize, LibterminalError, type TerminalSize } from "./index.js";
 import {
   TerminalMessageType,
@@ -532,26 +533,6 @@ async function loadRuntimeFromModule(
   } catch (cause) {
     throw new LibterminalError("ghostty_unavailable", "failed to load Ghostty WASM", { cause });
   }
-}
-
-const abortedResult = Symbol("aborted");
-
-function abortPromise(
-  signal?: AbortSignal,
-): { promise: Promise<typeof abortedResult>; dispose(): void } | undefined {
-  if (!signal) {
-    return undefined;
-  }
-  if (signal.aborted) {
-    return { promise: Promise.resolve(abortedResult), dispose: () => undefined };
-  }
-  let resolveAbort: (value: typeof abortedResult) => void = noop;
-  const promise = new Promise<typeof abortedResult>((resolve) => {
-    resolveAbort = resolve;
-  });
-  const abort = () => resolveAbort(abortedResult);
-  signal.addEventListener("abort", abort, { once: true });
-  return { promise, dispose: () => signal.removeEventListener("abort", abort) };
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
