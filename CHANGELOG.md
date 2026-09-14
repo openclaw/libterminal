@@ -2,7 +2,7 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.6 - Unreleased
+## 0.3.6 - 2026-09-13
 
 ### Fixed
 
@@ -14,12 +14,12 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
-- Complete Vitest 5 validation with the matching V8 coverage provider, a documented coverage command, and coverage reporting in Node.js 24 CI; keep the existing Node.js 22/24/26 checks and development exclusion of Node.js 25.
 - Refresh Vite to 8.3, Lightning CSS to 1.33, and PostCSS to 8.5.28; deduplicate Rolldown while preserving the two-day dependency cooldown.
 - Refresh transitive build tooling while preserving the two-day dependency cooldown.
 - Validate Node.js 26 in CI alongside the existing Node.js 22 and 24 cross-platform checks.
 - Refresh Node.js types, oxfmt, and oxlint while preserving the two-day dependency cooldown.
 - Update pinned CodeQL analysis actions to 4.38.0. (#62, thanks @dependabot)
+- Complete Vitest 5 validation with the matching V8 coverage provider, a documented coverage command, and coverage reporting in Node.js 24 CI; keep the existing Node.js 22/24/26 checks and development exclusion of Node.js 25.
 
 ## 0.3.5 - 2026-09-07
 
