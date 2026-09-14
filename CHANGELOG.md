@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.7 - Unreleased
 
+### Changed
+
+- Expand Ghostty browser validation across Node and Worker assets with input, resize, fitting, disposal, sustained-output checks, and reproducible runtime baselines ahead of the gated v1.4 upgrade. (#41, thanks @vincentkoc)
+
 ## 0.3.6 - 2026-09-13
 
 ### Fixed

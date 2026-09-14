@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { readGhosttyAsset } from "../dist/node.js";
+import { readGhosttyWorkerAsset } from "../dist/worker-assets.js";
 
 const host = "127.0.0.1";
 const port = 4179;
@@ -21,12 +22,15 @@ function distScriptPath(pathname) {
   }
   return resolved;
 }
-const html = `<!doctype html>
+/** @param {"node" | "worker"} assets */
+function html(assets) {
+  const prefix = assets === "worker" ? "/worker" : "";
+  return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
     <title>libterminal browser smoke</title>
-    <script type="importmap">{"imports":{"ghostty-web":"/vendor/ghostty-web.js"}}</script>
+    <script type="importmap">{"imports":{"ghostty-web":"${prefix}/vendor/ghostty-web.js"}}</script>
     <style>
       html, body, #terminal { width: 800px; height: 320px; margin: 0; background: #111; }
     </style>
@@ -34,13 +38,23 @@ const html = `<!doctype html>
   <body>
     <div id="terminal"></div>
     <script type="module">
-      import { createGhosttyTerminal } from "/dist/browser.js";
       try {
+        const started = performance.now();
+        const { createGhosttyTerminal, loadGhosttyRuntime } = await import("/dist/browser.js");
+        const runtime = await loadGhosttyRuntime({ wasmUrl: "${prefix}/vendor/ghostty-vt.wasm" });
+        window.smokeRuntimeMs = performance.now() - started;
+        window.smokeInput = [];
+        window.smokeResizes = [];
         const terminal = await createGhosttyTerminal({
           parent: document.querySelector("#terminal"),
-          runtimeOptions: { wasmUrl: "/vendor/ghostty-vt.wasm" },
+          runtime,
           size: { columns: 80, rows: 20 },
+          autoFit: false,
+          terminalOptions: { scrollback: 100, cursorBlink: false },
+          onData: (bytes) => window.smokeInput.push(new TextDecoder().decode(bytes)),
+          onResize: (size) => window.smokeResizes.push(size),
         });
+        window.smokeStartupMs = performance.now() - started;
         terminal.write(new TextEncoder().encode("\\u001b[32mLIBTERMINAL_SMOKE_OK\\u001b[0m"));
         window.smokeTerminal = terminal;
         document.body.dataset.ready = "true";
@@ -50,12 +64,18 @@ const html = `<!doctype html>
     </script>
   </body>
 </html>`;
+}
 
 const server = createServer(async (request, response) => {
   try {
-    const pathname = new URL(request.url ?? "/", `http://${host}:${port}`).pathname;
+    const url = new URL(request.url ?? "/", `http://${host}:${port}`);
+    const pathname = url.pathname;
     if (pathname === "/") {
-      send(response, html, "text/html; charset=utf-8");
+      send(
+        response,
+        html(url.searchParams.get("assets") === "worker" ? "worker" : "node"),
+        "text/html; charset=utf-8",
+      );
       return;
     }
     const distFile = distScriptPath(pathname);
@@ -63,8 +83,12 @@ const server = createServer(async (request, response) => {
       send(response, await readFile(distFile), "text/javascript; charset=utf-8");
       return;
     }
-    const asset = await readGhosttyAsset(pathname);
+    const fromWorker = pathname.startsWith("/worker/");
+    const asset = fromWorker
+      ? readGhosttyWorkerAsset(pathname.slice("/worker".length))
+      : await readGhosttyAsset(pathname);
     if (asset) {
+      response.setHeader("x-smoke-asset-source", fromWorker ? "worker" : "node");
       send(response, asset.body, asset.contentType);
       return;
     }

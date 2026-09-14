@@ -33,6 +33,12 @@ pnpm test
 pnpm test:coverage
 ```
 
+`pnpm test:browser` exercises the built browser package with both Node-served
+and embedded Worker Ghostty assets. It also records synthetic plain-text,
+Unicode/CJK, and escape-heavy output baselines. See
+[`docs/ghostty-upgrade.md`](docs/ghostty-upgrade.md) for the measurement method,
+limitations, and remaining upstream adoption gates.
+
 The Vitest 5 coverage command uses the matching V8 provider and reports all
 handwritten TypeScript under `src/`, including files not imported by tests.
 Only the generated Ghostty asset payload is excluded. Read the terminal summary,
