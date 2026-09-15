@@ -161,22 +161,22 @@ export async function attachTerminalStream(
     failed = true;
     failure = error;
   } finally {
-    aborted?.dispose();
     if (!completed) {
-      const returned = iterator.return?.();
-      if (signal?.aborted) {
-        void Promise.resolve(returned).catch(noop);
-      } else {
-        try {
+      try {
+        const returned = iterator.return?.();
+        if (aborted) {
+          await Promise.race([aborted.promise, returned]);
+        } else {
           await returned;
-        } catch (error) {
-          if (!failed) {
-            failed = true;
-            failure = error;
-          }
+        }
+      } catch (error) {
+        if (!failed && !signal?.aborted) {
+          failed = true;
+          failure = error;
         }
       }
     }
+    aborted?.dispose();
   }
   if (failed) {
     throw failure;
@@ -355,5 +355,3 @@ function combineAbortSignals(
     },
   };
 }
-
-function noop(): void {}
