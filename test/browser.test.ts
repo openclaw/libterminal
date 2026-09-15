@@ -147,6 +147,39 @@ describe("attachTerminalStream", () => {
 });
 
 describe("TerminalHubClient", () => {
+  it.each(["Buffer", "ArrayBuffer", "arrayBuffer method"])(
+    "owns normalized %s frames from injected transports",
+    async (kind) => {
+      const socket = new TestTerminalHubSocket();
+      const frames: Uint8Array[] = [];
+      const client = new TerminalHubClient({
+        url: "wss://terminal.example",
+        socketFactory: () => socket,
+        onFrame: (frame) => frames.push(frame.payload),
+      });
+      client.connect();
+      socket.open();
+      const buffer = new Uint8Array(
+        encodeTerminalFrame({
+          type: TerminalMessageType.Output,
+          payload: new TextEncoder().encode("safe"),
+        }),
+      ).buffer;
+      const source = kind === "Buffer" ? Buffer.from(buffer) : new Uint8Array(buffer);
+      socket.receive(
+        kind === "Buffer"
+          ? source
+          : kind === "ArrayBuffer"
+            ? buffer
+            : { arrayBuffer: async () => buffer },
+      );
+      await vi.waitFor(() => expect(frames).toHaveLength(1));
+      source.fill(120);
+      expect(new TextDecoder().decode(frames[0])).toBe("safe");
+      client.close();
+    },
+  );
+
   it("sends the protocol hello and delivers decoded frames in order", async () => {
     const socket = new TestTerminalHubSocket();
     const frames: Array<{ sessionId: string; payload: string }> = [];
@@ -557,3 +590,4 @@ function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 function noop(): void {}
+import { Buffer } from "node:buffer";

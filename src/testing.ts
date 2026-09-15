@@ -37,7 +37,7 @@ export function createFakeTerminalDuplex(): FakeTerminalDuplex {
     sizes,
     closeReasons,
     write: async (bytes) => {
-      writes.push(bytes.slice());
+      writes.push(new Uint8Array(bytes));
     },
     resize: async (size) => {
       sizes.push({ ...size });
@@ -190,7 +190,7 @@ export async function collectTerminalOutput(
 ): Promise<Uint8Array[]> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of output) {
-    chunks.push(chunk.slice());
+    chunks.push(new Uint8Array(chunk));
     if (chunks.length >= limit) {
       break;
     }
@@ -210,9 +210,9 @@ class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
   push(bytes: Uint8Array): void {
     const waiter = this.waiters.shift();
     if (waiter) {
-      waiter({ done: false, value: bytes.slice() });
+      waiter({ done: false, value: new Uint8Array(bytes) });
     } else if (!this.closed) {
-      this.chunks.push(bytes.slice());
+      this.chunks.push(new Uint8Array(bytes));
     }
   }
 

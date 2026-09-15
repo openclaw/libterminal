@@ -219,20 +219,14 @@ function defaultTerminalHubSocketFactory(url: string): TerminalHubWebSocket {
 }
 
 async function terminalFrameBytes(data: unknown): Promise<Uint8Array> {
-  if (data instanceof Uint8Array) {
-    return data.slice();
-  }
   if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data);
+    return new Uint8Array(new Uint8Array(data));
   }
   if (ArrayBuffer.isView(data)) {
-    return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
-  }
-  if (typeof Blob !== "undefined" && data instanceof Blob) {
-    return new Uint8Array(await data.arrayBuffer());
+    return new Uint8Array(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
   }
   if (hasArrayBuffer(data)) {
-    return new Uint8Array(await data.arrayBuffer());
+    return new Uint8Array(new Uint8Array(await data.arrayBuffer()));
   }
   return textEncoder.encode(String(data));
 }
