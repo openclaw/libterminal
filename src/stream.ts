@@ -40,10 +40,10 @@ export class BoundedReplayBuffer {
     if (bytes.byteLength === 0 || this.maxBytes === 0) {
       return;
     }
-    const chunk =
-      bytes.byteLength > this.maxBytes
-        ? bytes.slice(bytes.byteLength - this.maxBytes)
-        : bytes.slice();
+    // Buffer.slice() aliases its source; always take ownership of retained bytes.
+    const chunk = new Uint8Array(
+      bytes.byteLength > this.maxBytes ? bytes.subarray(bytes.byteLength - this.maxBytes) : bytes,
+    );
     this.chunks.push(chunk);
     this.storedBytes += chunk.byteLength;
     this.trim();
@@ -217,7 +217,7 @@ export class BatchPublisher {
     if (this.stopped || this.failure || bytes.byteLength === 0) {
       return;
     }
-    this.chunks.push(bytes.slice());
+    this.chunks.push(new Uint8Array(bytes));
     this.bytes += bytes.byteLength;
     if (this.bytes >= this.maxBatchBytes) {
       void this.flush().catch((error: unknown) => this.onError?.(error));
@@ -305,11 +305,11 @@ class SubscriberQueue implements AsyncIterator<Uint8Array> {
     }
     const waiter = this.waiters.shift();
     if (waiter) {
-      waiter({ done: false, value: bytes.slice() });
+      waiter({ done: false, value: new Uint8Array(bytes) });
       return 0;
     }
     if (this.bytes + bytes.byteLength <= this.maxBytes) {
-      this.chunks.push(bytes.slice());
+      this.chunks.push(new Uint8Array(bytes));
       this.bytes += bytes.byteLength;
       return 0;
     }
@@ -324,10 +324,9 @@ class SubscriberQueue implements AsyncIterator<Uint8Array> {
       this.bytes -= removedBytes;
       droppedBytes += removedBytes;
     }
-    const chunk =
-      bytes.byteLength > this.maxBytes
-        ? bytes.slice(bytes.byteLength - this.maxBytes)
-        : bytes.slice();
+    const chunk = new Uint8Array(
+      bytes.byteLength > this.maxBytes ? bytes.subarray(bytes.byteLength - this.maxBytes) : bytes,
+    );
     this.chunks.push(chunk);
     this.bytes += chunk.byteLength;
     return droppedBytes + Math.max(0, bytes.byteLength - chunk.byteLength);

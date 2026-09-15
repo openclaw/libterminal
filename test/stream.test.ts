@@ -1,8 +1,24 @@
+import { Buffer } from "node:buffer";
 import { describe, expect, it, vi } from "vitest";
 import { BatchPublisher, BoundedReplayBuffer, TerminalFanout } from "../src/stream.js";
 import { terminalBytes as bytes, terminalText as text } from "../src/testing.js";
 
 describe("BoundedReplayBuffer", () => {
+  it.each([4, 6, 8])("owns Buffer input and snapshots with a %i-byte limit", (limit) => {
+    const replay = new BoundedReplayBuffer(limit);
+    const source = Buffer.from("_abcdef_").subarray(1, 7);
+    const expected = "abcdef".slice(-limit);
+    replay.append(source);
+    source.fill(120);
+    expect(text(replay.snapshot())).toBe(expected);
+
+    replay.snapshot()[0].fill(121);
+    expect(text(replay.snapshot())).toBe(expected);
+
+    replay.append(bytes("gh"));
+    expect(text(replay.snapshot())).toBe(`${expected}gh`.slice(-limit));
+  });
+
   it("retains only the newest bounded output", () => {
     const replay = new BoundedReplayBuffer(5);
     replay.append(bytes("abc"));
@@ -26,6 +42,31 @@ describe("BoundedReplayBuffer", () => {
 });
 
 describe("TerminalFanout", () => {
+  it.each(["queued", "waiting", "overflow"])(
+    "isolates Buffer input, subscribers, and replay for %s delivery",
+    async (mode) => {
+      const fanout = new TerminalFanout({
+        subscriberBufferBytes: mode === "overflow" ? 3 : 4,
+        slowSubscriberPolicy: "drop-oldest",
+      });
+      const first = fanout.subscribe("first")[Symbol.asyncIterator]();
+      const second = fanout.subscribe("second")[Symbol.asyncIterator]();
+      const waiting = mode === "waiting" ? first.next() : undefined;
+      const source = Buffer.from("_safe_").subarray(1, 5);
+      fanout.publish(source);
+      source.fill(120);
+
+      const expected = mode === "overflow" ? "afe" : "safe";
+      const received = await (waiting ?? first.next());
+      expect(received.value).toEqual(bytes(expected));
+      received.value.fill(121);
+      expect((await second.next()).value).toEqual(bytes(expected));
+      const replay = fanout.subscribe("replay")[Symbol.asyncIterator]();
+      expect((await replay.next()).value).toEqual(bytes(expected));
+      fanout.close();
+    },
+  );
+
   it("does not let an old handle close a replacement with the same id", async () => {
     const fanout = new TerminalFanout();
     const old = fanout.subscribe("viewer");
@@ -113,6 +154,18 @@ describe("TerminalFanout", () => {
 });
 
 describe("BatchPublisher", () => {
+  it("copies Buffer input before a deferred flush", async () => {
+    const batches: Uint8Array[] = [];
+    const publisher = new BatchPublisher(async (batch) => {
+      batches.push(batch);
+    });
+    const source = Buffer.from("_safe_").subarray(1, 5);
+    publisher.write(source);
+    source.fill(120);
+    await publisher.stop();
+    expect(text(batches)).toBe("safe");
+  });
+
   it("publishes ordered batches at the byte threshold and on stop", async () => {
     const batches: string[] = [];
     const publisher = new BatchPublisher(

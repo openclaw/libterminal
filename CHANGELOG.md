@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.7 - Unreleased
 
+### Fixed
+
+- Own copied terminal bytes so Node.js `Buffer` reuse, replay snapshot edits, and subscriber mutations cannot corrupt streaming output or testing-helper recordings; isolate normalized hub frames from transport-owned `Buffer` and `ArrayBuffer` storage.
+
 ### Changed
 
 - Expand Ghostty browser validation across Node and Worker assets with input, resize, fitting, disposal, sustained-output checks, and reproducible runtime baselines ahead of the gated v1.4 upgrade. (#41, thanks @vincentkoc)

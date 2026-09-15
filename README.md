@@ -40,6 +40,13 @@ pnpm add node-pty
 each subscription when its consumer finishes. IDs can be reused after closing;
 an old subscription handle cannot close a later subscription with the same ID.
 
+Replay buffers, fanout subscriptions, and batch publishers copy incoming bytes,
+including Node.js `Buffer` inputs. Callers can reuse their input buffers after
+appending, publishing, or writing. Replay snapshots and subscriber output are
+independent copies, so changing one cannot corrupt other readers or stored replay.
+The exported testing helpers also copy recorded input and output bytes, including
+sources that reuse a `Buffer` between chunks.
+
 ## Browser
 
 Ghostty terminals default to read-only. The application owns authorization,
@@ -92,6 +99,9 @@ their canonical `/vendor` routes.
 optional reconnect scheduling for multiplexed terminal WebSockets. Applications
 continue to own URL construction, authorization, session subscriptions, and
 terminal lifecycle.
+
+Normalized hub frames own their byte storage, including messages received as
+Node.js `Buffer` values from injected transports.
 
 ```ts
 import { TerminalHubClient } from "@openclaw/libterminal/browser";
