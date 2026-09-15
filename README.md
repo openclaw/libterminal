@@ -65,6 +65,8 @@ await terminal.attach(output);
 ```
 
 Aborting an attached stream stops buffered output as well as future reads.
+Cancellation also stops waiting for source cleanup. Cleanup failures never replace
+an existing read or terminal-write failure, and abort-only cleanup errors are ignored.
 
 `ghostty-web` 0.4.0 does not emit responses for OSC 10-12 default-color
 queries. Applications that write PTY output into the browser terminal can use

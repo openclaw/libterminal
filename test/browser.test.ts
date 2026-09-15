@@ -54,6 +54,106 @@ describe("createGhosttyTerminal", () => {
 });
 
 describe("attachTerminalStream", () => {
+  it.each([
+    ["read", "sync"],
+    ["read", "async"],
+    ["write", "sync"],
+    ["write", "async"],
+  ])("preserves a %s failure when %s iterator cleanup fails", async (operation, cleanup) => {
+    const failure = new Error(`${operation} failed`);
+    const cleanupFailure = new Error("cleanup failed");
+    const returned = vi.fn(() => {
+      if (cleanup === "sync") {
+        throw cleanupFailure;
+      }
+      return Promise.reject(cleanupFailure);
+    });
+    const source = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => {
+          if (operation === "read") {
+            throw failure;
+          }
+          return { done: false as const, value: new Uint8Array([1]) };
+        },
+        return: returned,
+      }),
+    };
+    await expect(
+      attachTerminalStream(
+        {
+          write: () => {
+            throw failure;
+          },
+        },
+        source,
+      ),
+    ).rejects.toBe(failure);
+    expect(returned).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["before attachment", "sync"],
+    ["before attachment", "async"],
+    ["while reading", "sync"],
+    ["while reading", "async"],
+  ])("suppresses %s abort cleanup errors from a %s return", async (when, cleanup) => {
+    const controller = new AbortController();
+    const returned = vi.fn(() => {
+      const failure = new Error("cleanup failed");
+      if (cleanup === "sync") {
+        throw failure;
+      }
+      return Promise.reject(failure);
+    });
+    if (when === "before attachment") {
+      controller.abort();
+    }
+    const source = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => new Promise<IteratorResult<Uint8Array>>(() => undefined),
+        return: returned,
+      }),
+    };
+    const attached = attachTerminalStream({ write: vi.fn() }, source, controller.signal);
+    controller.abort();
+    await expect(attached).resolves.toBeUndefined();
+    expect(returned).toHaveBeenCalledOnce();
+  });
+
+  it("stops waiting for cleanup on abort while retaining the original failure", async () => {
+    const controller = new AbortController();
+    const failure = new Error("write failed");
+    let rejectCleanup!: (reason: unknown) => void;
+    const cleanup = new Promise<IteratorResult<Uint8Array>>((_, reject) => {
+      rejectCleanup = reject;
+    });
+    const returned = vi.fn(() => cleanup);
+    const rejected = vi.fn();
+    const attached = attachTerminalStream(
+      {
+        write: () => {
+          throw failure;
+        },
+      },
+      {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => ({ done: false as const, value: new Uint8Array([1]) }),
+          return: returned,
+        }),
+      },
+      controller.signal,
+    ).catch(rejected);
+    try {
+      await vi.waitFor(() => expect(returned).toHaveBeenCalledOnce());
+      controller.abort();
+      await vi.waitFor(() => expect(rejected).toHaveBeenCalledWith(failure));
+    } finally {
+      rejectCleanup(new Error("late cleanup failure"));
+      await attached;
+    }
+  });
+
   it.each(["before attachment", "while a read resolves"])(
     "does not write buffered output aborted %s",
     async (when) => {

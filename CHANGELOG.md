@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Keep browser stream cleanup cancellable and preserve the original read/write error when iterator cleanup throws synchronously, matching asynchronous cleanup behavior.
 - Own copied terminal bytes so Node.js `Buffer` reuse, replay snapshot edits, and subscriber mutations cannot corrupt streaming output or testing-helper recordings; isolate normalized hub frames from transport-owned `Buffer` and `ArrayBuffer` storage.
 
 ### Changed
