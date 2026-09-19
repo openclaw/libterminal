@@ -20,7 +20,7 @@ behavior are public compatibility surfaces, not implementation details.
 - Security policy: [`SECURITY.md`](SECURITY.md)
 
 Read the nearest scoped `AGENTS.md` before changing files below this directory.
-`CLAUDE.md` is a compatibility symlink to this file; edit `AGENTS.md` only.
+Edit `AGENTS.md` directly; do not add `CLAUDE.md` aliases.
 
 Keep pnpm on the maintained 11.x JavaScript release line until Dependabot can
 bootstrap pnpm 12's native binary through its network proxy. Keep `packageManager`
