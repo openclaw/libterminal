@@ -94,7 +94,7 @@
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.0.0",
     "node-pty": "^1.1.0",
-    "oxfmt": "^0.67.0",
+    "oxfmt": "^0.68.0",
     "oxlint": "^1.82.0",
     "oxlint-tsgolint": "^7.0.2001",
     "tsdown": "^0.23.0",
@@ -113,5 +113,5 @@
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },
-  "packageManager": "pnpm@11.26.0"
+  "packageManager": "pnpm@11.27.0"
 }
