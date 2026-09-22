@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Capture hub message and stdio input bytes before queuing delivery so immediate producer buffer reuse cannot drop frames or corrupt terminal input.
 - Keep browser stream cleanup cancellable and preserve the original read/write error when iterator cleanup throws synchronously, matching asynchronous cleanup behavior.
 - Own copied terminal bytes so Node.js `Buffer` reuse, replay snapshot edits, and subscriber mutations cannot corrupt streaming output or testing-helper recordings; isolate normalized hub frames from transport-owned `Buffer` and `ArrayBuffer` storage.
 

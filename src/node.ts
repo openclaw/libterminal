@@ -184,7 +184,7 @@ export async function attachLocalStdio(
     aborted ? Promise.race([aborted.promise, operation]) : operation;
   let pendingInput = Promise.resolve();
   const writeInput = (data: Buffer | string) => {
-    const bytes = typeof data === "string" ? textEncoder.encode(data) : data;
+    const bytes = typeof data === "string" ? textEncoder.encode(data) : new Uint8Array(data);
     pendingInput = pendingInput.then(async () => {
       if (!options?.signal?.aborted) {
         await terminal.write?.(bytes);

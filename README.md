@@ -103,7 +103,8 @@ continue to own URL construction, authorization, session subscriptions, and
 terminal lifecycle.
 
 Normalized hub frames own their byte storage, including messages received as
-Node.js `Buffer` values from injected transports.
+Node.js `Buffer` values from injected transports. Mutable message bytes are copied
+when received, before queued delivery, so transports can immediately reuse them.
 
 ```ts
 import { TerminalHubClient } from "@openclaw/libterminal/browser";
@@ -143,6 +144,9 @@ await attachLocalStdio(terminal);
 
 PTY output queues are bounded by default. Raw stdin mode is restored when the
 session ends, errors, or aborts.
+
+Stdio input bytes are copied when received, before queued terminal writes, so
+input producers can immediately reuse their buffers.
 
 Aborting a stdio attachment restores it without waiting for a pending write or
 resize. Caller-owned streams stay open, and late errors from an outstanding
