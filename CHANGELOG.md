@@ -2,7 +2,11 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.7 - Unreleased
+## 0.3.8 - Unreleased
+
+## 0.3.7 - 2026-09-22
+
+**Highlights:** Preserve terminal bytes across buffer reuse and keep browser stream cleanup cancellable without losing the original error.
 
 ### Fixed
 
