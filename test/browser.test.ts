@@ -247,6 +247,36 @@ describe("attachTerminalStream", () => {
 });
 
 describe("TerminalHubClient", () => {
+  it.each(["Buffer", "ArrayBuffer", "DataView"])(
+    "captures %s bytes before queuing frame delivery",
+    async (kind) => {
+      const socket = new TestTerminalHubSocket();
+      const frames: string[] = [];
+      const client = new TerminalHubClient({
+        url: "wss://terminal.example",
+        socketFactory: () => socket,
+        onFrame: (frame) => frames.push(new TextDecoder().decode(frame.payload)),
+      });
+      client.connect();
+      socket.open();
+      const source = Buffer.from(
+        encodeTerminalFrame({
+          type: TerminalMessageType.Output,
+          payload: new TextEncoder().encode("safe"),
+        }),
+      );
+      const buffer = ownedArrayBuffer(source);
+      socket.receive(
+        kind === "Buffer" ? source : kind === "ArrayBuffer" ? buffer : new DataView(buffer),
+      );
+      source.fill(0);
+      new Uint8Array(buffer).fill(0);
+
+      await vi.waitFor(() => expect(frames).toEqual(["safe"]));
+      client.close();
+    },
+  );
+
   it.each(["Buffer", "ArrayBuffer", "arrayBuffer method"])(
     "owns normalized %s frames from injected transports",
     async (kind) => {
@@ -279,6 +309,35 @@ describe("TerminalHubClient", () => {
       client.close();
     },
   );
+
+  it("handles conversion failures while an earlier frame is still queued", async () => {
+    const socket = new TestTerminalHubSocket();
+    const events: unknown[] = [];
+    let resolveFirst!: (bytes: ArrayBuffer) => void;
+    const first = new Promise<ArrayBuffer>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const failure = new Error("conversion failed");
+    const client = new TerminalHubClient({
+      url: "wss://terminal.example",
+      socketFactory: () => socket,
+      onFrame: () => events.push("frame"),
+      onError: (error) => events.push(error),
+    });
+    client.connect();
+    socket.open();
+    socket.receive({ arrayBuffer: () => first });
+    socket.receive({
+      arrayBuffer: async () => {
+        throw failure;
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(events).toEqual([]);
+    resolveFirst(ownedArrayBuffer(encodeTerminalFrame({ type: TerminalMessageType.Output })));
+    await vi.waitFor(() => expect(events).toEqual(["frame", failure]));
+    client.close();
+  });
 
   it("sends the protocol hello and delivers decoded frames in order", async () => {
     const socket = new TestTerminalHubSocket();

@@ -427,6 +427,34 @@ describe("attachLocalStdio", () => {
     await attached;
   });
 
+  it("captures stdin bytes before a producer reuses its Buffer", async () => {
+    const controller = new AbortController();
+    const stdio = testStdio();
+    const writes: string[] = [];
+    const attached = attachLocalStdio(
+      {
+        output: neverOutput(),
+        close: async () => undefined,
+        write: async (bytes) => {
+          await Promise.resolve();
+          writes.push(new TextDecoder().decode(bytes));
+        },
+      },
+      { signal: controller.signal, stdin: stdio.stdin, stdout: stdio.stdout },
+    );
+    try {
+      const source = Buffer.from("first");
+      stdio.input(source);
+      source.write("later");
+      stdio.input(source);
+      source.fill(0);
+      await vi.waitFor(() => expect(writes).toEqual(["first", "later"]));
+    } finally {
+      controller.abort();
+      await attached;
+    }
+  });
+
   it("restores stdio after output completes without waiting forever for pending input", async () => {
     const removed: string[] = [];
     let paused = false;
@@ -864,7 +892,7 @@ async function* singleOutput(): AsyncIterable<Uint8Array> {
 function testStdio(): {
   stdin: NodeJS.ReadStream;
   stdout: NodeJS.WriteStream;
-  input(value: string): void;
+  input(value: string | Buffer): void;
 } {
   let inputListener: (data: Buffer) => void = noop;
   const stdin = {
@@ -891,7 +919,7 @@ function testStdio(): {
   return {
     stdin,
     stdout,
-    input: (value) => inputListener(Buffer.from(value)),
+    input: (value) => inputListener(typeof value === "string" ? Buffer.from(value) : value),
   };
 }
 

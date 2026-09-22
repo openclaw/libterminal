@@ -131,14 +131,17 @@ export class TerminalHubClient {
     enqueueMessage: (task: () => Promise<void>) => void,
   ): (event: { data: unknown }) => void {
     return (event) => {
+      if (this.socket !== socket) {
+        return;
+      }
+      const bytes = terminalFrameBytes(event.data);
+      // Capture mutable bytes now and handle conversion failures while delivery is queued.
+      void bytes.catch(noop);
       enqueueMessage(async () => {
         if (this.socket !== socket) {
           return;
         }
-        const frame = tryDecodeTerminalFrame(
-          await terminalFrameBytes(event.data),
-          this.options.frameLimits,
-        );
+        const frame = tryDecodeTerminalFrame(await bytes, this.options.frameLimits);
         if (frame && this.socket === socket) {
           this.notify(() => this.options.onFrame?.(frame));
         }
