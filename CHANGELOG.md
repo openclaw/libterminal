@@ -2,7 +2,11 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.8 - Unreleased
+## 0.3.9 - Unreleased
+
+## 0.3.8 - 2026-10-01
+
+**Highlights:** Keep failed stdio attachments protected from late stdout errors until pending output settles.
 
 ### Fixed
 
