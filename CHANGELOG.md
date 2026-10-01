@@ -10,6 +10,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Refresh oxfmt, oxlint, Node.js and WebSocket types, WebSocket test tooling, and Vitest with its matching V8 coverage provider while preserving the two-day dependency cooldown and supported runtime floors. (#90, thanks @dependabot[bot])
 - Refresh Node.js types, Vitest and its V8 coverage provider, type-aware lint tooling, WebSocket test tooling, CodeQL, and pnpm 11 while preserving the supported runtime floors. (#87, #88, thanks @dependabot[bot])
 
 ## 0.3.7 - 2026-09-22

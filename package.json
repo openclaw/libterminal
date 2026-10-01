@@ -89,18 +89,18 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.6.2",
-    "@types/ws": "^8.18.1",
+    "@types/node": "^26.6.3",
+    "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.0.2",
     "node-pty": "^1.1.0",
-    "oxfmt": "^0.70.0",
-    "oxlint": "^1.85.0",
-    "oxlint-tsgolint": "^7.0.2002",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
     "tsdown": "^0.23.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.1",
-    "ws": "^8.21.3"
+    "vitest": "^5.0.2",
+    "ws": "^8.22.0"
   },
   "peerDependencies": {
     "node-pty": ">=1.0.0"
