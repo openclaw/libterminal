@@ -4,6 +4,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.9 - Unreleased
 
+- Use one shared autoreview installation from `openclaw/agent-skills`; repository entrypoints now receive upstream fixes without copied helpers or test suites.
+
 ## 0.3.8 - 2026-10-01
 
 **Highlights:** Keep failed stdio attachments protected from late stdout errors until pending output settles.
