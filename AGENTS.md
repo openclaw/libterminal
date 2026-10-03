@@ -76,7 +76,7 @@ for code, protocol, test, package, or workflow changes.
 ## Review And Release
 
 - For non-trivial changes, run
-  `.agents/skills/autoreview/scripts/autoreview` before final handoff.
+  `python3 "$HOME/.agents/skills/autoreview/scripts/autoreview"` before final handoff.
 - Verify every accepted review finding against the actual code and tests.
 - Releases are tag-driven from `main` through `.github/workflows/release.yml`.
 - Never publish locally or add long-lived npm tokens to repository settings.

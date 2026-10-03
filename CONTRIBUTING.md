@@ -65,10 +65,11 @@ Protocol definitions, exported types, event ordering, cancellation behavior, and
 error shapes are public compatibility surfaces. Prefer additive changes and call
 out any deliberate break explicitly.
 
-For non-trivial changes, run the repository autoreview helper before handoff:
+Follow [the shared skill setup](.agents/skills/autoreview/SKILL.md) once.
+For non-trivial changes, run the shared autoreview helper before handoff:
 
 ```bash
-.agents/skills/autoreview/scripts/autoreview
+python3 "$HOME/.agents/skills/autoreview/scripts/autoreview"
 ```
 
 ## Reporting Bugs
