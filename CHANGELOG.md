@@ -2,7 +2,11 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.9 - Unreleased
+## 0.3.10 - Unreleased
+
+## 0.3.9 - 2026-10-03
+
+**Highlights:** Complete terminal teardown without losing close metadata, duplicating sink failures, or exposing delayed stream errors.
 
 ### Fixed
 
