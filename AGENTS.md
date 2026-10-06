@@ -76,7 +76,13 @@ for code, protocol, test, package, or workflow changes.
 ## Review And Release
 
 - For non-trivial changes, run
-  `python3 "$HOME/.agents/skills/autoreview/scripts/autoreview"` before final handoff.
+  `python3 "$HOME/.agents/skills/autoreview/scripts/autoreview" --max-priority P3` before final handoff.
 - Verify every accepted review finding against the actual code and tests.
 - Releases are tag-driven from `main` through `.github/workflows/release.yml`.
 - Never publish locally or add long-lived npm tokens to repository settings.
+
+## Autoreview priority
+
+Use `--max-priority P3` with the shared autoreview helper to preserve this
+repository's existing P0–P3 review gate. Follow the
+[shared skill setup](.agents/skills/autoreview/SKILL.md) before running it.

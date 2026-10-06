@@ -69,7 +69,7 @@ Follow [the shared skill setup](.agents/skills/autoreview/SKILL.md) once.
 For non-trivial changes, run the shared autoreview helper before handoff:
 
 ```bash
-python3 "$HOME/.agents/skills/autoreview/scripts/autoreview"
+python3 "$HOME/.agents/skills/autoreview/scripts/autoreview" --max-priority P3
 ```
 
 ## Reporting Bugs
