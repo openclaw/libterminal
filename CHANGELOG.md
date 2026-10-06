@@ -14,6 +14,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 - Report a batch publisher sink failure once when another batch is already queued behind that same failure.
 - Drop stdout listeners when a pending stdio write fails because the stream is already closed, so the finished attach does not keep that session alive.
 
+- Use one shared autoreview installation from `openclaw/agent-skills`; repository entrypoints now receive upstream fixes without copied helpers or test suites.
+
 ## 0.3.8 - 2026-10-01
 
 **Highlights:** Keep failed stdio attachments protected from late stdout errors until pending output settles.
