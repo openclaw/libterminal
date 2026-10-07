@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.10 - Unreleased
 
+### Changed
+
+- Refresh Node.js types and transitive build tooling, and align Vitest dependency ranges with the locked patch release while preserving the two-day dependency cooldown and supported runtime floors. (#100, thanks @dependabot[bot])
+
 ## 0.3.9 - 2026-10-03
 
 **Highlights:** Complete terminal teardown without losing close metadata, duplicating sink failures, or exposing delayed stream errors.
