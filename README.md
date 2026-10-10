@@ -4,8 +4,8 @@ Shared TypeScript primitives for streaming, rendering, and bridging terminals
 across browsers, Node.js, and Cloudflare Workers.
 
 ```ts
-import { BoundedReplayBuffer } from "@openclaw/libterminal/stream";
 import { decodeTerminalFrame } from "@openclaw/libterminal/protocol";
+import { BoundedReplayBuffer } from "@openclaw/libterminal/stream";
 ```
 
 The package deliberately does not own authentication, public listeners,
