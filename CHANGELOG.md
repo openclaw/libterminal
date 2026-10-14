@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Update the pinned CodeQL initialization and analysis actions to 4.38.3 and the default scanner bundle to 2.27.2. (#105, thanks @dependabot[bot])
 - Update oxfmt to 0.72, oxlint to 1.87, and actions/setup-node to 7.1 while preserving the dependency cooldown and supported runtime floors. (thanks @dependabot[bot])
 - Refresh Node.js types and transitive build tooling, and align Vitest dependency ranges with the locked patch release while preserving the two-day dependency cooldown and supported runtime floors. (#100, thanks @dependabot[bot])
 
