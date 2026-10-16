@@ -2,7 +2,11 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
-## 0.3.10 - Unreleased
+## 0.3.11 - Unreleased
+
+## 0.3.10 - 2026-10-16
+
+**Highlights:** Fix a source-map denial-of-service vulnerability in the test toolchain and refresh development and release tooling.
 
 ### Fixed
 
