@@ -89,3 +89,9 @@ terminal output.
 
 Maintainers publish from a `vX.Y.Z` tag on `main` through the trusted-publishing
 workflow. Do not publish from a local machine or add an npm automation token.
+
+After changing release dependencies or tooling, run the Release workflow on
+`main` with `dry_run: true` and `version` set to the current package version.
+This validates metadata and runs the full release check without publishing.
+Manual runs require dry-run mode; publishing remains restricted to protected
+version tags.

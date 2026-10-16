@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate the release without publishing
+        type: boolean
+        required: true
+        default: true
+      version:
+        description: Current package version to validate
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -17,8 +28,8 @@ env:
 
 jobs:
   publish:
-    name: Publish @openclaw/libterminal
-    if: github.ref_protected
+    name: Validate or publish @openclaw/libterminal
+    if: (github.event_name == 'push' && github.ref_protected) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.dry_run)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -33,7 +44,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
-          version: 11.28.0
+          version: 11.28.2
           run_install: false
 
       - name: Set up Node
@@ -85,6 +96,7 @@ jobs:
           NODE
 
       - name: Validate release tag
+        if: github.event_name == 'push'
         env:
           RELEASE_SHA: ${{ github.sha }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -110,7 +122,21 @@ jobs:
           execFileSync("git", ["merge-base", "--is-ancestor", releaseSha, "origin/main"]);
           NODE
 
+      - name: Validate dry-run version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          node <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          if (process.env.EXPECTED_VERSION !== pkg.version) {
+            throw new Error(`dry-run version must match package version ${pkg.version}`);
+          }
+          NODE
+
       - name: Ensure version is unpublished
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           package_name="$(node -p "require('./package.json').name")"
@@ -135,4 +161,5 @@ jobs:
         run: pnpm run check:release
 
       - name: Publish with npm trusted publishing
+        if: github.event_name == 'push'
         run: npm publish --access public --provenance
