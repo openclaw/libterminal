@@ -4,8 +4,13 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.10 - Unreleased
 
+### Fixed
+
+- Update the test toolchain's transitive source-map-js dependency to 1.2.2 to fix the indexed source-map denial-of-service advisory GHSA-68fv-2mgg-jv7q.
+
 ### Changed
 
+- Update oxfmt to 0.73, oxlint to 1.88, and pnpm to the stable 11.28.2 patch, align dependency ranges with the lockfile, and add a safe manual release check for validating tooling updates without publishing. (thanks @dependabot[bot])
 - Update the GitHub App token action to 3.3.0 while preserving repository-scoped dispatch and comment permissions. (#106, thanks @dependabot[bot])
 - Update the pinned CodeQL initialization and analysis actions to 4.38.3 and the default scanner bundle to 2.27.2. (#105, thanks @dependabot[bot])
 - Update oxfmt to 0.72, oxlint to 1.87, and actions/setup-node to 7.1 while preserving the dependency cooldown and supported runtime floors. (thanks @dependabot[bot])
