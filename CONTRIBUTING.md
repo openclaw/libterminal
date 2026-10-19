@@ -19,6 +19,10 @@ described in [SECURITY.md](SECURITY.md).
 Use Node.js 22.18+, 24.11+, or 26+ and the pnpm version declared by the repository.
 The development toolchain does not support Node.js 23 or 25.
 
+macOS CI runs the Node.js 22 and 24 checks on the Apple Silicon `xcode-27`
+runner. The published package contains JavaScript and types; native PTY support
+remains an optional dependency supplied by consuming applications.
+
 ```bash
 pnpm install
 pnpm check
