@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.11 - Unreleased
 
+### Changed
+
+- Run macOS CI on the Apple Silicon Xcode 27 image while preserving the supported Node.js versions and package targets.
+
 ## 0.3.10 - 2026-10-16
 
 **Highlights:** Fix a source-map denial-of-service vulnerability in the test toolchain and refresh development and release tooling.
