@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Use fixed Node.js patches for build, CI, and release tooling to reject the disclosed eMudhra incident keys.
+
 - Update Vitest and its V8 coverage provider to 5.0.5 and the paired CodeQL actions to 4.39.0, preserving supported runtimes and the dependency cooldown. (#112, #113, thanks @dependabot[bot])
 - Run macOS CI on the Apple Silicon Xcode 27 image while preserving the supported Node.js versions and package targets.
 
