@@ -36,14 +36,14 @@ jobs:
       fail-fast: false
       matrix:
         node:
-          - 22
-          - 24
+          - "22.23.4"
+          - "24.22.1"
         os:
           - ubuntu-latest
           - xcode-27
           - windows-latest
         include:
-          - node: 26
+          - node: "26.12.1"
             os: ubuntu-latest
     steps:
       - name: Check out
@@ -69,7 +69,7 @@ jobs:
         run: pnpm check
 
       - name: Report coverage
-        if: matrix.node == 24 && matrix.os == 'ubuntu-latest'
+        if: matrix.node == '24.22.1' && matrix.os == 'ubuntu-latest'
         run: pnpm test:coverage
 
   browser-smoke:
@@ -89,7 +89,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
