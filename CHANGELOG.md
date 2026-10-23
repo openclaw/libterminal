@@ -6,6 +6,9 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Require patched Vite 8.3.5 for the test server so automatic peer resolution cannot select versions affected by the launch-editor and file-serving security advisories.
+- Refresh formatter, linter, and Playwright tooling, and align local, CI, and release setup on pnpm 11.28.4 while preserving the two-day cooldown and supported Node.js versions. (#116, thanks @dependabot[bot])
+
 - Use fixed Node.js patches for build, CI, and release tooling to reject the disclosed eMudhra incident keys.
 
 - Update Vitest and its V8 coverage provider to 5.0.5 and the paired CodeQL actions to 4.39.0, preserving supported runtimes and the dependency cooldown. (#112, #113, thanks @dependabot[bot])
