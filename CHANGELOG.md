@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Refresh tsdown and the type-aware lint tooling, including compatible transitive build dependencies, while preserving the two-day cooldown and supported Node.js versions.
 - Update the paired CodeQL initialization and analysis actions to 4.39.1 and the default scanner bundle to 2.27.3. (#117, thanks @dependabot[bot])
 - Require patched Vite 8.3.5 for the test server so automatic peer resolution cannot select versions affected by the launch-editor and file-serving security advisories.
 - Refresh formatter, linter, and Playwright tooling, and align local, CI, and release setup on pnpm 11.28.4 while preserving the two-day cooldown and supported Node.js versions. (#116, thanks @dependabot[bot])
