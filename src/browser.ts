@@ -140,8 +140,6 @@ export async function attachTerminalStream(
   const iterator = source[Symbol.asyncIterator]();
   const aborted = abortPromise(signal);
   let completed = false;
-  let failed = false;
-  let failure: unknown;
   try {
     for (;;) {
       if (signal?.aborted) {
@@ -159,9 +157,6 @@ export async function attachTerminalStream(
       }
       target.write(result.value);
     }
-  } catch (error) {
-    failed = true;
-    failure = error;
   } finally {
     if (!completed) {
       try {
@@ -171,17 +166,11 @@ export async function attachTerminalStream(
         } else {
           await returned;
         }
-      } catch (error) {
-        if (!failed && !signal?.aborted) {
-          failed = true;
-          failure = error;
-        }
+      } catch {
+        // Incomplete streams have already failed or been aborted; preserve that outcome.
       }
     }
     aborted?.dispose();
-  }
-  if (failed) {
-    throw failure;
   }
 }
 
