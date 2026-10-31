@@ -1,3 +1,4 @@
+import { AsyncByteQueue } from "./byte-queue.js";
 import type { TerminalDuplex, TerminalSize } from "./index.js";
 import {
   WEB_SOCKET_OPEN,
@@ -27,7 +28,7 @@ export type FakeTerminalDuplex = TerminalDuplex & {
 };
 
 export function createFakeTerminalDuplex(): FakeTerminalDuplex {
-  const output = new AsyncByteQueue();
+  const output = new AsyncByteQueue(Number.POSITIVE_INFINITY);
   const writes: Uint8Array[] = [];
   const sizes: TerminalSize[] = [];
   const closeReasons: Array<string | undefined> = [];
@@ -46,7 +47,9 @@ export function createFakeTerminalDuplex(): FakeTerminalDuplex {
       closeReasons.push(reason);
       output.close();
     },
-    emitOutput: (bytes) => output.push(bytes),
+    emitOutput: (bytes) => {
+      output.enqueue(bytes, "drop-oldest");
+    },
     endOutput: () => output.close(),
   };
 }
@@ -196,41 +199,4 @@ export async function collectTerminalOutput(
     }
   }
   return chunks;
-}
-
-class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
-  private chunks: Uint8Array[] = [];
-  private waiters: Array<(result: IteratorResult<Uint8Array>) => void> = [];
-  private closed = false;
-
-  [Symbol.asyncIterator](): AsyncIterableIterator<Uint8Array> {
-    return this;
-  }
-
-  push(bytes: Uint8Array): void {
-    const waiter = this.waiters.shift();
-    if (waiter) {
-      waiter({ done: false, value: new Uint8Array(bytes) });
-    } else if (!this.closed) {
-      this.chunks.push(new Uint8Array(bytes));
-    }
-  }
-
-  async next(): Promise<IteratorResult<Uint8Array>> {
-    const chunk = this.chunks.shift();
-    if (chunk) {
-      return { done: false, value: chunk };
-    }
-    if (this.closed) {
-      return { done: true, value: undefined };
-    }
-    return new Promise((resolve) => this.waiters.push(resolve));
-  }
-
-  close(): void {
-    this.closed = true;
-    for (const waiter of this.waiters.splice(0)) {
-      waiter({ done: true, value: undefined });
-    }
-  }
 }
