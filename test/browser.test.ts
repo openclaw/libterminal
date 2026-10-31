@@ -21,7 +21,9 @@ describe("createGhosttyTerminal", () => {
     }
     class FitAddon extends TestGhosttyFitAddon {
       fit(): void {
-        if (phase === "fit") abort.abort(reason);
+        if (phase === "fit") {
+          abort.abort(reason);
+        }
       }
     }
     await expect(
@@ -32,7 +34,9 @@ describe("createGhosttyTerminal", () => {
         signal: abort.signal,
         onStatus: ({ state }) => {
           statuses.push(state);
-          if (phase === "ready" && state === "ready") abort.abort(reason);
+          if (phase === "ready" && state === "ready") {
+            abort.abort(reason);
+          }
         },
       }),
     ).rejects.toBe(reason);
