@@ -7,6 +7,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 ### Fixed
 
 - Capture mutable Worker bridge message bytes before queuing either direction so transport buffer reuse cannot corrupt terminal input or output.
+- Stop queued hub frame delivery immediately when the caller closes, including while the native WebSocket close handshake is pending.
 
 ### Changed
 

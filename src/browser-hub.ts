@@ -118,7 +118,7 @@ export class TerminalHubClient {
 
   private handleOpen(socket: TerminalHubWebSocket): () => void {
     return () => {
-      if (this.socket !== socket) {
+      if (this.socket !== socket || this.closedByCaller) {
         return;
       }
       this.send({ type: TerminalMessageType.Hello });
@@ -131,18 +131,18 @@ export class TerminalHubClient {
     enqueueMessage: (task: () => Promise<void>) => void,
   ): (event: { data: unknown }) => void {
     return (event) => {
-      if (this.socket !== socket) {
+      if (this.socket !== socket || this.closedByCaller) {
         return;
       }
       const bytes = terminalFrameBytes(event.data);
       // Capture mutable bytes now and handle conversion failures while delivery is queued.
       void bytes.catch(noop);
       enqueueMessage(async () => {
-        if (this.socket !== socket) {
+        if (this.socket !== socket || this.closedByCaller) {
           return;
         }
         const frame = tryDecodeTerminalFrame(await bytes, this.options.frameLimits);
-        if (frame && this.socket === socket) {
+        if (frame && this.socket === socket && !this.closedByCaller) {
           this.notify(() => this.options.onFrame?.(frame));
         }
       });
