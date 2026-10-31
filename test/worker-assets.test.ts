@@ -16,8 +16,10 @@ describe("Worker Ghostty assets", () => {
       for (const pathname of Object.values(GHOSTTY_ASSET_PATHS)) {
         const expected = await readGhosttyAsset(pathname);
         const actual = readGhosttyWorkerAsset(pathname);
-        expect(actual?.contentType).toBe(expected?.contentType);
-        expect(Buffer.from(actual?.body ?? [])).toEqual(Buffer.from(expected?.body ?? []));
+        expect(expected, pathname).not.toBeNull();
+        expect(actual, pathname).not.toBeNull();
+        expect(actual!.contentType).toBe(expected!.contentType);
+        expect(Buffer.from(actual!.body)).toEqual(Buffer.from(expected!.body));
       }
     },
   );
