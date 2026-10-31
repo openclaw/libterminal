@@ -54,13 +54,19 @@ export function createFakeTerminalDuplex(): FakeTerminalDuplex {
   };
 }
 
+type FakeWebSocketListeners = {
+  message: (event: WebSocketMessageEventLike) => void;
+  close: (event: WebSocketCloseEventLike) => void;
+  error: () => void;
+};
+
 export class FakeWebSocket implements WebSocketLike {
   readyState = WEB_SOCKET_OPEN;
   readonly sent: WebSocketPayload[] = [];
   closed?: { code?: number; reason?: string };
-  private readonly messages = new Set<(event: WebSocketMessageEventLike) => void>();
-  private readonly closes = new Set<(event: WebSocketCloseEventLike) => void>();
-  private readonly errors = new Set<() => void>();
+  private readonly listeners: {
+    [Type in keyof FakeWebSocketListeners]: Set<FakeWebSocketListeners[Type]>;
+  } = { message: new Set(), close: new Set(), error: new Set() };
 
   send(data: WebSocketPayload): void {
     this.sent.push(data);
@@ -71,53 +77,35 @@ export class FakeWebSocket implements WebSocketLike {
     this.readyState = 3;
   }
 
-  addEventListener(
-    type: "message" | "close" | "error",
-    listener:
-      | ((event: WebSocketMessageEventLike) => void)
-      | ((event: WebSocketCloseEventLike) => void)
-      | (() => void),
+  addEventListener<Type extends keyof FakeWebSocketListeners>(
+    type: Type,
+    listener: FakeWebSocketListeners[Type],
   ): void {
-    if (type === "message") {
-      this.messages.add(listener as (event: WebSocketMessageEventLike) => void);
-    } else if (type === "close") {
-      this.closes.add(listener as (event: WebSocketCloseEventLike) => void);
-    } else {
-      this.errors.add(listener as () => void);
-    }
+    this.listeners[type].add(listener);
   }
 
-  removeEventListener(
-    type: "message" | "close" | "error",
-    listener:
-      | ((event: WebSocketMessageEventLike) => void)
-      | ((event: WebSocketCloseEventLike) => void)
-      | (() => void),
+  removeEventListener<Type extends keyof FakeWebSocketListeners>(
+    type: Type,
+    listener: FakeWebSocketListeners[Type],
   ): void {
-    if (type === "message") {
-      this.messages.delete(listener as (event: WebSocketMessageEventLike) => void);
-    } else if (type === "close") {
-      this.closes.delete(listener as (event: WebSocketCloseEventLike) => void);
-    } else {
-      this.errors.delete(listener as () => void);
-    }
+    this.listeners[type].delete(listener);
   }
 
   receive(data: unknown): void {
-    for (const listener of this.messages) {
+    for (const listener of this.listeners.message) {
       listener({ data });
     }
   }
 
   emitClose(code = 1000, reason = ""): void {
     this.readyState = 3;
-    for (const listener of this.closes) {
+    for (const listener of this.listeners.close) {
       listener({ code, reason });
     }
   }
 
   emitError(): void {
-    for (const listener of this.errors) {
+    for (const listener of this.listeners.error) {
       listener();
     }
   }
