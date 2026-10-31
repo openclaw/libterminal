@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { abortedResult, abortPromise } from "./abort.js";
+import { AsyncByteQueue } from "./byte-queue.js";
 import { GHOSTTY_ASSET_PATHS, type GhosttyAsset } from "./ghostty-assets.js";
 import {
   assertTerminalSize,
@@ -88,7 +89,11 @@ export async function loadNodePtyDriver(): Promise<PtyDriver> {
 export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<LocalPtySession> {
   throwIfAborted(options.signal);
   const size = assertTerminalSize(options.size ?? { columns: 120, rows: 34 });
-  const output = new AsyncByteQueue(options.outputBufferBytes, options.onOutputDrop);
+  const outputBufferBytes = options.outputBufferBytes ?? 1024 * 1024;
+  if (!Number.isSafeInteger(outputBufferBytes) || outputBufferBytes < 1) {
+    throw new RangeError("outputBufferBytes must be a positive safe integer");
+  }
+  const output = new AsyncByteQueue(outputBufferBytes);
   const driver = options.driver ?? (await loadNodePtyDriver());
   throwIfAborted(options.signal);
   const inputDecoder = new TextDecoder();
@@ -119,7 +124,10 @@ export async function spawnLocalPty(options: SpawnLocalPtyOptions): Promise<Loca
   };
   const dataSubscription = terminal.onData((data) => {
     const bytes = textEncoder.encode(data);
-    output.push(bytes);
+    const droppedBytes = output.enqueue(bytes, "drop-oldest");
+    if (droppedBytes > 0) {
+      options.onOutputDrop?.(droppedBytes);
+    }
     options.onOutput?.(bytes.slice());
   });
   let exitSubscription: DisposableLike;
@@ -323,76 +331,6 @@ export async function readGhosttyAsset(pathname: string): Promise<GhosttyAsset |
     body: await fs.readFile(asset.path),
     contentType: asset.contentType,
   };
-}
-
-class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
-  private readonly maxBytes: number;
-  private readonly onDrop?: (droppedBytes: number) => void;
-  private chunks: Uint8Array[] = [];
-  private bytes = 0;
-  private waiters: Array<(result: IteratorResult<Uint8Array>) => void> = [];
-  private closed = false;
-
-  constructor(maxBytes = 1024 * 1024, onDrop?: (droppedBytes: number) => void) {
-    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-      throw new RangeError("outputBufferBytes must be a positive safe integer");
-    }
-    this.maxBytes = maxBytes;
-    this.onDrop = onDrop;
-  }
-
-  [Symbol.asyncIterator](): AsyncIterableIterator<Uint8Array> {
-    return this;
-  }
-
-  push(bytes: Uint8Array): void {
-    if (this.closed) {
-      return;
-    }
-    const waiter = this.waiters.shift();
-    if (waiter) {
-      waiter({ done: false, value: bytes.slice() });
-      return;
-    }
-    const chunk =
-      bytes.byteLength > this.maxBytes
-        ? bytes.slice(bytes.byteLength - this.maxBytes)
-        : bytes.slice();
-    let droppedBytes = bytes.byteLength - chunk.byteLength;
-    while (this.chunks.length > 0 && this.bytes + chunk.byteLength > this.maxBytes) {
-      const removed = this.chunks.shift();
-      const removedBytes = removed?.byteLength ?? 0;
-      this.bytes -= removedBytes;
-      droppedBytes += removedBytes;
-    }
-    this.chunks.push(chunk);
-    this.bytes += chunk.byteLength;
-    if (droppedBytes > 0) {
-      this.onDrop?.(droppedBytes);
-    }
-  }
-
-  async next(): Promise<IteratorResult<Uint8Array>> {
-    const chunk = this.chunks.shift();
-    if (chunk) {
-      this.bytes -= chunk.byteLength;
-      return { done: false, value: chunk };
-    }
-    if (this.closed) {
-      return { done: true, value: undefined };
-    }
-    return new Promise((resolve) => this.waiters.push(resolve));
-  }
-
-  close(): void {
-    if (this.closed) {
-      return;
-    }
-    this.closed = true;
-    for (const waiter of this.waiters.splice(0)) {
-      waiter({ done: true, value: undefined });
-    }
-  }
 }
 
 function currentEnvironment(): Record<string, string> {
