@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Reject browser terminal creation with the caller's abort reason when a startup callback cancels, disposing the terminal instead of returning a closed controller.
 - Capture mutable Worker bridge message bytes before queuing either direction so transport buffer reuse cannot corrupt terminal input or output.
 
 ### Changed

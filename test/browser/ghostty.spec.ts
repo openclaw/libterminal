@@ -14,6 +14,39 @@ declare global {
 }
 
 for (const assets of ["node", "worker"]) {
+  test(`${assets} assets dispose a terminal cancelled during startup`, async ({ page }) => {
+    await page.goto(`/?assets=${assets}`);
+    await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+    const result = await page.evaluate(async (assetSource) => {
+      const moduleUrl = "/dist/browser.js";
+      const browser = (await import(moduleUrl)) as typeof import("../../src/browser.js");
+      const prefix = assetSource === "worker" ? "/worker" : "";
+      const runtime = await browser.loadGhosttyRuntime({
+        wasmUrl: `${prefix}/vendor/ghostty-vt.wasm`,
+      });
+      const parent = document.createElement("div");
+      document.body.append(parent);
+      const abort = new AbortController();
+      const statuses: string[] = [];
+      let rejected = false;
+      try {
+        const terminal = await browser.createGhosttyTerminal({
+          parent,
+          runtime,
+          size: { columns: 40, rows: 10 },
+          signal: abort.signal,
+          onResize: () => abort.abort("cancelled during resize"),
+          onStatus: ({ state }) => statuses.push(state),
+        });
+        terminal.dispose();
+      } catch (error) {
+        rejected = error === "cancelled during resize";
+      }
+      return { rejected, statuses, canvases: parent.querySelectorAll("canvas").length };
+    }, assets);
+    expect(result).toEqual({ rejected: true, statuses: ["loading"], canvases: 0 });
+  });
+
   test(`${assets} assets preserve input, resize, fit, and disposal`, async ({ page }) => {
     const wasm = page.waitForResponse((response) => response.url().endsWith("ghostty-vt.wasm"));
     await page.goto(`/?assets=${assets}`);

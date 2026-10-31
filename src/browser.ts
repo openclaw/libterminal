@@ -109,7 +109,9 @@ export async function createGhosttyTerminal(
     terminal.open(options.parent);
     controller = new BrowserTerminalController(terminal, fitAddon, readOnly, options);
     controller.start();
+    throwIfAborted(options.signal);
     options.onStatus?.({ state: "ready" });
+    throwIfAborted(options.signal);
     return controller;
   } catch (cause) {
     if (controller) {
