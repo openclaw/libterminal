@@ -258,6 +258,24 @@ describe("BatchPublisher", () => {
     await expect(publisher.flush()).rejects.toBe(sinkError);
   });
 
+  it.each([undefined, null, false, 0, "", new Error("sink failed")])(
+    "preserves a sink rejection of %s",
+    async (reason) => {
+      const onError = vi.fn();
+      const sink = vi.fn(async () => {
+        throw reason;
+      });
+      const publisher = new BatchPublisher(sink, { maxBatchBytes: 1, onError });
+      publisher.write(bytes("x"));
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(reason));
+      publisher.write(bytes("ignored"));
+      await expect(publisher.flush()).rejects.toBe(reason);
+      await expect(publisher.stop()).rejects.toBe(reason);
+      expect(sink).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledOnce();
+    },
+  );
+
   it("reports one sink failure when a second batch is queued behind it", async () => {
     const errors: unknown[] = [];
     let rejectSink!: (error: unknown) => void;
