@@ -8,6 +8,38 @@ import {
 import { TerminalMessageType, decodeTerminalFrame, encodeTerminalFrame } from "../src/protocol.js";
 
 describe("createGhosttyTerminal", () => {
+  it.each(["resize", "fit", "ready"])("rejects cancellation during %s startup", async (phase) => {
+    const abort = new AbortController();
+    const reason = new Error("cancelled during startup");
+    const dispose = vi.fn();
+    const statuses: string[] = [];
+    class Terminal extends TestGhosttyTerminal {
+      resize(): void {
+        abort.abort(reason);
+      }
+      dispose = dispose;
+    }
+    class FitAddon extends TestGhosttyFitAddon {
+      fit(): void {
+        if (phase === "fit") abort.abort(reason);
+      }
+    }
+    await expect(
+      createGhosttyTerminal({
+        parent: {} as HTMLElement,
+        runtime: { ghostty: {}, Terminal, FitAddon } as never,
+        size: phase === "resize" ? { columns: 40, rows: 10 } : undefined,
+        signal: abort.signal,
+        onStatus: ({ state }) => {
+          statuses.push(state);
+          if (phase === "ready" && state === "ready") abort.abort(reason);
+        },
+      }),
+    ).rejects.toBe(reason);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(statuses).toEqual(phase === "ready" ? ["loading", "ready"] : ["loading"]);
+  });
+
   it("preserves abort reasons raised while Ghostty is loading", async () => {
     const controller = new AbortController();
     const reason = new Error("cancelled by caller");
