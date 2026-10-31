@@ -28,20 +28,45 @@ describe("BoundedReplayBuffer", () => {
     expect(text(replay.snapshot())).toBe("23456");
   });
 
-  it("trims fragmented output without recursive stack growth", () => {
-    const replay = new BoundedReplayBuffer(20_000);
-    for (let index = 0; index < 20_000; index += 1) {
+  it.each([20_000, 100_000])("trims %i fragmented chunks", (limit) => {
+    const replay = new BoundedReplayBuffer(limit);
+    for (let index = 0; index < limit; index += 1) {
       replay.append(new Uint8Array([index % 256]));
     }
 
-    replay.append(new Uint8Array(20_000).fill(42));
-    expect(replay.byteLength).toBe(20_000);
+    replay.append(new Uint8Array(limit).fill(42));
+    expect(replay.byteLength).toBe(limit);
     expect(replay.snapshot()).toHaveLength(1);
-    expect(replay.snapshot()[0]).toEqual(new Uint8Array(20_000).fill(42));
+    expect(replay.snapshot()[0]).toEqual(new Uint8Array(limit).fill(42));
   });
 });
 
 describe("TerminalFanout", () => {
+  it("drops whole queued chunks and reports their exact byte counts", async () => {
+    const dropped: number[] = [];
+    const fanout = new TerminalFanout({
+      replayBytes: 0,
+      subscriberBufferBytes: 5,
+      slowSubscriberPolicy: "drop-oldest",
+      onEvent: (event) => {
+        if (event.type === "subscriber-overflow") {
+          dropped.push(event.droppedBytes);
+        }
+      },
+    });
+    const subscriber = fanout.subscribe("viewer");
+    for (const chunk of ["ab", "cd", "e", "fg", "hij"]) {
+      fanout.publish(bytes(chunk));
+    }
+    fanout.close();
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of subscriber) {
+      chunks.push(chunk);
+    }
+    expect(chunks.map((chunk) => text([chunk]))).toEqual(["fg", "hij"]);
+    expect(dropped).toEqual([2, 3]);
+  });
+
   it.each(["queued", "waiting", "overflow"])(
     "isolates Buffer input, subscribers, and replay for %s delivery",
     async (mode) => {
