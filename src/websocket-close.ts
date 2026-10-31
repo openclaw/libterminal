@@ -1,5 +1,3 @@
-const encoder = new TextEncoder();
-
 export type CloseableWebSocket = {
   close(code?: number, reason?: string): void;
 };
@@ -12,7 +10,10 @@ function truncateReason(source: string): string {
   let result = "";
   let bytes = 0;
   for (const character of source) {
-    const characterBytes = encoder.encode(character).byteLength;
+    // Lone surrogates encode as three-byte replacement characters.
+    const point = character.codePointAt(0)!;
+    const characterBytes =
+      1 + Number(point > 0x7f) + Number(point > 0x7ff) + Number(point > 0xffff);
     if (bytes + characterBytes > 123) {
       break;
     }
