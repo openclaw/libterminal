@@ -152,6 +152,7 @@ export function bridgeWebSockets(
   const canForward = () => !stopped && pairIsOpen(left, right);
 
   function onLeftMessage(event: WebSocketMessageEventLike): void {
+    const data = captureWebSocketMessageData(event.data);
     leftInputQueue = leftInputQueue
       .then(async () => {
         if (!canForward()) {
@@ -160,7 +161,7 @@ export function bridgeWebSockets(
         if (!leftCanSend || !(await revalidateControl()) || !canForward()) {
           return;
         }
-        const forwarded = await normalizeWebSocketMessageData(event.data);
+        const forwarded = await normalizeWebSocketMessageData(data);
         if (!canForward()) {
           return;
         }
@@ -180,12 +181,13 @@ export function bridgeWebSockets(
   }
 
   function onRightMessage(event: WebSocketMessageEventLike): void {
+    const data = captureWebSocketMessageData(event.data);
     rightOutputQueue = rightOutputQueue
       .then(async () => {
         if (!canForward()) {
           return;
         }
-        const forwarded = await normalizeWebSocketMessageData(event.data);
+        const forwarded = await normalizeWebSocketMessageData(data);
         if (!canForward()) {
           return;
         }
@@ -310,6 +312,17 @@ export async function normalizeWebSocketMessageData(data: unknown): Promise<WebS
     return data.arrayBuffer();
   }
   return String(data);
+}
+
+function captureWebSocketMessageData(data: unknown): unknown {
+  // Transports may reuse mutable backing storage as soon as the listener returns.
+  if (data instanceof ArrayBuffer) {
+    return data.slice(0);
+  }
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).buffer;
+  }
+  return data;
 }
 
 function pairIsOpen(left: WebSocketLike, right: WebSocketLike): boolean {

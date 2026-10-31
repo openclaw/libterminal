@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## 0.3.11 - Unreleased
 
+### Fixed
+
+- Capture mutable Worker bridge message bytes before queuing either direction so transport buffer reuse cannot corrupt terminal input or output.
+
 ### Changed
 
 - Refresh tsdown and the type-aware lint tooling, including compatible transitive build dependencies, while preserving the two-day cooldown and supported Node.js versions.
