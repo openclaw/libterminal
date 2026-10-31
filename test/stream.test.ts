@@ -179,6 +179,21 @@ describe("TerminalFanout", () => {
 });
 
 describe("BatchPublisher", () => {
+  it("keeps source bytes reusable when a sink mutates single-chunk batches", async () => {
+    const batches: Uint8Array[] = [];
+    const publisher = new BatchPublisher(async (batch) => {
+      batches.push(batch.slice());
+      batch.fill(0);
+    });
+    const source = bytes("safe");
+    publisher.write(source);
+    await publisher.flush();
+    expect(source).toEqual(bytes("safe"));
+    publisher.write(source);
+    await publisher.stop();
+    expect(batches.map((batch) => text([batch]))).toEqual(["safe", "safe"]);
+  });
+
   it("copies Buffer input before a deferred flush", async () => {
     const batches: Uint8Array[] = [];
     const publisher = new BatchPublisher(async (batch) => {

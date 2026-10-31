@@ -13,6 +13,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 ### Changed
 
 - Compact overflowed replay and subscriber buffers once per append instead of repeatedly shifting retained chunks.
+- Reuse owned single-chunk batches without an extra byte copy and share byte concatenation with the testing helpers.
 
 - Resolve only the requested Node Ghostty asset, avoiding directory scans for module, WASM, and unknown asset paths.
 - Avoid intermediate asset byte copies when creating Worker Ghostty responses while preserving isolated response bodies and asset reads.
