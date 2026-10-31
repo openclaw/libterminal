@@ -248,4 +248,3 @@ for (const assets of ["node", "worker"]) {
     });
   }
 }
-
