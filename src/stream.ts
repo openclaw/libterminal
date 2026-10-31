@@ -1,4 +1,5 @@
 import { AsyncByteQueue } from "./byte-queue.js";
+import { concatenateBytes } from "./bytes.js";
 import { LibterminalError } from "./index.js";
 
 export type SlowSubscriberPolicy = "disconnect" | "drop-oldest";
@@ -244,7 +245,7 @@ export class BatchPublisher {
       return;
     }
 
-    const batch = concatenate(this.chunks, this.bytes);
+    const batch = concatenateBytes(this.chunks, this.bytes);
     this.chunks = [];
     this.bytes = 0;
     this.pending = this.pending
@@ -297,14 +298,4 @@ export class BatchPublisher {
     this.abortSignal = undefined;
     this.abortHandler = undefined;
   }
-}
-
-function concatenate(chunks: Uint8Array[], byteLength: number): Uint8Array {
-  const result = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return result;
 }

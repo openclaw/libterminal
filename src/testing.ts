@@ -1,4 +1,5 @@
 import { AsyncByteQueue } from "./byte-queue.js";
+import { concatenateBytes } from "./bytes.js";
 import type { TerminalDuplex, TerminalSize } from "./index.js";
 import {
   WEB_SOCKET_OPEN,
@@ -164,15 +165,7 @@ export function terminalBytes(value: string): Uint8Array {
 }
 
 export function terminalText(chunks: Iterable<Uint8Array>): string {
-  const collected = [...chunks];
-  const byteLength = collected.reduce((total, chunk) => total + chunk.byteLength, 0);
-  const joined = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of collected) {
-    joined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(joined);
+  return new TextDecoder().decode(concatenateBytes([...chunks]));
 }
 
 export async function collectTerminalOutput(
