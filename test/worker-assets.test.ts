@@ -31,6 +31,20 @@ describe("Worker Ghostty assets", () => {
     expect(readGhosttyWorkerAsset(GHOSTTY_ASSET_PATHS.wasm)?.body).not.toEqual(asset!.body);
   });
 
+  it("isolates response bodies from later reads and other response consumers", async () => {
+    const pathname = GHOSTTY_ASSET_PATHS.browserExternal;
+    const expected = readGhosttyWorkerAsset(pathname)!.body;
+    const first = createGhosttyAssetResponse(pathname)!;
+    const second = createGhosttyAssetResponse(pathname)!;
+    readGhosttyWorkerAsset(pathname)!.body.fill(0);
+    const consumed = new Uint8Array(await first.arrayBuffer());
+    expect(consumed).toEqual(expected);
+    consumed.fill(0);
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(expected);
+    const later = createGhosttyAssetResponse(pathname)!;
+    expect(new Uint8Array(await later.arrayBuffer())).toEqual(expected);
+  });
+
   it("builds responses with canonical content types and caller policy", async () => {
     const response = createGhosttyAssetResponse(GHOSTTY_ASSET_PATHS.wasm, {
       headers: {

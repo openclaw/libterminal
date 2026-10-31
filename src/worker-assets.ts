@@ -4,7 +4,7 @@ import { GHOSTTY_WORKER_ASSET_BASE64 } from "./worker-ghostty-assets.generated.j
 export { GHOSTTY_ASSET_PATHS, type GhosttyAsset } from "./ghostty-assets.js";
 
 const encodedAssets = new Map(Object.entries(GHOSTTY_WORKER_ASSET_BASE64));
-const decodedAssets = new Map<string, Uint8Array>();
+const decodedAssets = new Map<string, Uint8Array<ArrayBuffer>>();
 
 export function readGhosttyWorkerAsset(pathname: string): GhosttyAsset | null {
   const asset = encodedAssets.get(pathname);
@@ -18,16 +18,16 @@ export function readGhosttyWorkerAsset(pathname: string): GhosttyAsset | null {
 }
 
 export function createGhosttyAssetResponse(pathname: string, init?: ResponseInit): Response | null {
-  const asset = readGhosttyWorkerAsset(pathname);
+  const asset = encodedAssets.get(pathname);
   if (!asset) {
     return null;
   }
   const headers = new Headers(init?.headers);
   headers.set("content-type", asset.contentType);
-  return new Response(new Uint8Array(asset.body).buffer, { ...init, headers });
+  return new Response(decodedAsset(pathname, asset.base64), { ...init, headers });
 }
 
-function decodedAsset(pathname: string, base64: string): Uint8Array {
+function decodedAsset(pathname: string, base64: string): Uint8Array<ArrayBuffer> {
   let bytes = decodedAssets.get(pathname);
   if (!bytes) {
     const binary = atob(base64);

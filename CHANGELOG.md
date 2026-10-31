@@ -13,6 +13,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 ### Changed
 
 - Resolve only the requested Node Ghostty asset, avoiding directory scans for module, WASM, and unknown asset paths.
+- Avoid intermediate asset byte copies when creating Worker Ghostty responses while preserving isolated response bodies and asset reads.
 
 - Run CodeQL when a draft pull request becomes ready for review so its draft-only skip cannot leave the ready pull request unscanned.
 - Refresh tsdown and the type-aware lint tooling, including compatible transitive build dependencies, while preserving the two-day cooldown and supported Node.js versions.
