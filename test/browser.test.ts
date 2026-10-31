@@ -1,3 +1,4 @@
+import { setImmediate } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
 import {
   TerminalHubClient,
@@ -283,6 +284,32 @@ describe("attachTerminalStream", () => {
 });
 
 describe("TerminalHubClient", () => {
+  it("drops an asynchronous frame converted after caller close", async () => {
+    const socket = new TestTerminalHubSocket();
+    vi.spyOn(socket, "close").mockImplementation(() => {
+      socket.readyState = 2;
+    });
+    const onFrame = vi.fn();
+    const client = new TerminalHubClient({
+      url: "ws://terminal.test",
+      socketFactory: () => socket,
+      onFrame,
+    });
+    client.connect();
+    socket.open();
+    let finish!: (value: ArrayBuffer) => void;
+    const pending = new Promise<ArrayBuffer>((resolve) => {
+      finish = resolve;
+    });
+    socket.receive({ arrayBuffer: () => pending });
+    await setImmediate();
+    client.close();
+    finish(ownedArrayBuffer(encodeTerminalFrame({ type: TerminalMessageType.Output })));
+    await setImmediate();
+    expect(onFrame).not.toHaveBeenCalled();
+    socket.emitClose();
+  });
+
   it.each(["Buffer", "ArrayBuffer", "DataView"])(
     "captures %s bytes before queuing frame delivery",
     async (kind) => {

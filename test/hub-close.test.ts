@@ -3,8 +3,46 @@ import type { AddressInfo } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { TerminalHubClient } from "../src/browser.js";
+import { encodeTerminalFrame, TerminalMessageType } from "../src/protocol.js";
 
 describe("TerminalHubClient native WebSocket teardown", () => {
+  it("drops queued frames as soon as the caller closes", async () => {
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    let client: TerminalHubClient | undefined;
+    try {
+      await once(server, "listening");
+      const onFrame = vi.fn();
+      let markClosed!: () => void;
+      const closed = new Promise<void>((resolve) => {
+        markClosed = resolve;
+      });
+      client = new TerminalHubClient({
+        url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        socketFactory: (url) => {
+          const socket = new WebSocket(url);
+          socket.addEventListener("message", () => queueMicrotask(() => client?.close()));
+          return socket;
+        },
+        onFrame,
+        onClose: markClosed,
+      });
+      const connected = once(server, "connection");
+      client.connect();
+      const [peer] = await connected;
+      peer.send(
+        encodeTerminalFrame({ type: TerminalMessageType.Output, payload: new Uint8Array([65]) }),
+      );
+      await closed;
+      expect(onFrame).not.toHaveBeenCalled();
+    } finally {
+      client?.close();
+      for (const peer of server.clients) {
+        peer.terminate();
+      }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it.each([
     {
       name: "reserved code",
