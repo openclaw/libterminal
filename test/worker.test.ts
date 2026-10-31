@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { describe, expect, it, vi } from "vitest";
 import { FakeWebSocket } from "../src/testing.js";
 import {
@@ -16,6 +17,56 @@ function redactTestToken(reason: string): string {
 }
 
 describe("bridgeWebSockets", () => {
+  it.each([
+    ["left", "Buffer"],
+    ["left", "ArrayBuffer"],
+    ["left", "DataView"],
+    ["right", "Buffer"],
+    ["right", "ArrayBuffer"],
+    ["right", "DataView"],
+  ])("captures %s %s bytes before queued delivery", async (direction, kind) => {
+    const left = new FakeWebSocket();
+    const right = new FakeWebSocket();
+    const bridge = bridgeWebSockets(left, right, { controlCheckIntervalMs: 0 });
+    const source = direction === "left" ? left : right;
+    const target = direction === "left" ? right : left;
+    let release!: (value: ArrayBuffer) => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const pending = new Promise<ArrayBuffer>((resolve) => {
+      release = resolve;
+    });
+    source.receive({
+      arrayBuffer: () => {
+        markStarted();
+        return pending;
+      },
+    });
+    await started;
+    const bytes = new TextEncoder().encode("_safe_");
+    const data =
+      kind === "Buffer"
+        ? Buffer.from(bytes.buffer, 1, 4)
+        : kind === "DataView"
+          ? new DataView(bytes.buffer, 1, 4)
+          : bytes.slice(1, 5).buffer;
+    source.receive(data);
+    bytes.fill(120);
+    if (data instanceof ArrayBuffer) {
+      new Uint8Array(data).fill(120);
+    }
+    release(new ArrayBuffer(0));
+    try {
+      await vi.waitFor(() => expect(target.sent).toHaveLength(2));
+      expect(new TextDecoder().decode(target.sent[1] as ArrayBuffer)).toBe("safe");
+    } finally {
+      bridge.close();
+      await bridge.completed;
+    }
+  });
+
   it("closes the open peer when the other socket is already closed", async () => {
     const left = new FakeWebSocket();
     left.readyState = 3;
