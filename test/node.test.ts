@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import fs from "node:fs/promises";
 import { PassThrough, Writable } from "node:stream";
 import { setImmediate } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
@@ -950,6 +951,22 @@ describe("attachLocalStdio", () => {
 });
 
 describe("readGhosttyAsset", () => {
+  it("serves known files without depending on directory discovery", async () => {
+    const failure = new Error("directory discovery unavailable");
+    const readdir = vi.spyOn(fs, "readdir").mockRejectedValue(failure);
+    try {
+      await expect(readGhosttyAsset("/missing")).resolves.toBeNull();
+      for (const pathname of [GHOSTTY_ASSET_PATHS.module, GHOSTTY_ASSET_PATHS.wasm]) {
+        const asset = await readGhosttyAsset(pathname);
+        expect(asset).not.toBeNull();
+        expect(asset!.body.byteLength).toBeGreaterThan(0);
+      }
+      await expect(readGhosttyAsset(GHOSTTY_ASSET_PATHS.browserExternal)).rejects.toBe(failure);
+    } finally {
+      readdir.mockRestore();
+    }
+  });
+
   it("exports and resolves the bundled Ghostty asset manifest", async () => {
     expect(GHOSTTY_ASSET_PATHS).toEqual({
       module: "/vendor/ghostty-web.js",
