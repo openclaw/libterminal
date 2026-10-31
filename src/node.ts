@@ -66,6 +66,7 @@ export type AttachLocalStdioOptions = {
 };
 
 const textEncoder = new TextEncoder();
+const ghosttyAssetPaths = new Set<string>(Object.values(GHOSTTY_ASSET_PATHS));
 
 export async function loadNodePtyDriver(): Promise<PtyDriver> {
   await ensureNodePtySpawnHelperExecutable();
@@ -323,13 +324,19 @@ export async function ensureNodePtySpawnHelperExecutable(): Promise<void> {
 }
 
 export async function readGhosttyAsset(pathname: string): Promise<GhosttyAsset | null> {
-  const asset = (await ghosttyAssets()).get(pathname);
-  if (!asset) {
+  if (!ghosttyAssetPaths.has(pathname)) {
     return null;
   }
+  const isWasm = pathname === GHOSTTY_ASSET_PATHS.wasm;
+  let assetPath = fileURLToPath(
+    import.meta.resolve(isWasm ? "ghostty-web/ghostty-vt.wasm" : "ghostty-web"),
+  );
+  if (pathname === GHOSTTY_ASSET_PATHS.browserExternal) {
+    assetPath = await findBrowserExternalAsset(path.dirname(assetPath));
+  }
   return {
-    body: await fs.readFile(asset.path),
-    contentType: asset.contentType,
+    body: await fs.readFile(assetPath),
+    contentType: isWasm ? "application/wasm" : "text/javascript; charset=utf-8",
   };
 }
 
@@ -358,32 +365,6 @@ function writeToStream(stream: NodeJS.WriteStream, bytes: Uint8Array): Promise<v
       }
     });
   });
-}
-
-async function ghosttyAssets(): Promise<Map<string, { path: string; contentType: string }>> {
-  const modulePath = fileURLToPath(import.meta.resolve("ghostty-web"));
-  const distPath = path.dirname(modulePath);
-  const browserExternalPath = await findBrowserExternalAsset(distPath);
-  return new Map([
-    [
-      GHOSTTY_ASSET_PATHS.module,
-      { path: modulePath, contentType: "text/javascript; charset=utf-8" },
-    ],
-    [
-      GHOSTTY_ASSET_PATHS.wasm,
-      {
-        path: fileURLToPath(import.meta.resolve("ghostty-web/ghostty-vt.wasm")),
-        contentType: "application/wasm",
-      },
-    ],
-    [
-      GHOSTTY_ASSET_PATHS.browserExternal,
-      {
-        path: browserExternalPath,
-        contentType: "text/javascript; charset=utf-8",
-      },
-    ],
-  ]);
 }
 
 async function findBrowserExternalAsset(distPath: string): Promise<string> {
