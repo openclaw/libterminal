@@ -191,7 +191,6 @@ export class BatchPublisher {
   private bytes = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending: Promise<void> = Promise.resolve();
-  private failure: unknown;
   private failureReported = false;
   private stopped = false;
   private abortSignal?: AbortSignal;
@@ -218,7 +217,7 @@ export class BatchPublisher {
   }
 
   write(bytes: Uint8Array): void {
-    if (this.stopped || this.failure || bytes.byteLength === 0) {
+    if (this.stopped || bytes.byteLength === 0) {
       return;
     }
     this.chunks.push(new Uint8Array(bytes));
@@ -236,10 +235,6 @@ export class BatchPublisher {
 
   async flush(): Promise<void> {
     this.clearTimer();
-    if (this.failure) {
-      this.dropBufferedChunks();
-      throw this.failure;
-    }
     if (this.chunks.length === 0) {
       await this.pending;
       return;
@@ -251,7 +246,6 @@ export class BatchPublisher {
     this.pending = this.pending
       .then(() => this.sink(batch))
       .catch((error: unknown) => {
-        this.failure = error;
         this.stopped = true;
         this.dropBufferedChunks();
         throw error;
