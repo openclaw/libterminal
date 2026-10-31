@@ -12,7 +12,8 @@ function truncateReason(source: string): string {
   for (const character of source) {
     // Lone surrogates encode as three-byte replacement characters.
     const point = character.codePointAt(0)!;
-    const characterBytes = 1 + Number(point > 0x7f) + Number(point > 0x7ff) + Number(point > 0xffff);
+    const characterBytes =
+      1 + Number(point > 0x7f) + Number(point > 0x7ff) + Number(point > 0xffff);
     if (bytes + characterBytes > 123) {
       break;
     }
