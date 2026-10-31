@@ -22,21 +22,19 @@ export class AsyncByteQueue implements AsyncIterableIterator<Uint8Array> {
       waiter({ done: false, value: new Uint8Array(bytes) });
       return 0;
     }
-    if (this.bytes + bytes.byteLength <= this.maxBytes) {
-      this.chunks.push(new Uint8Array(bytes));
-      this.bytes += bytes.byteLength;
-      return 0;
-    }
-    if (policy === "disconnect") {
+    if (policy === "disconnect" && this.bytes + bytes.byteLength > this.maxBytes) {
       return bytes.byteLength;
     }
 
     let droppedBytes = 0;
-    while (this.chunks.length > 0 && this.bytes + bytes.byteLength > this.maxBytes) {
-      const removed = this.chunks.shift();
-      const removedBytes = removed?.byteLength ?? 0;
+    let removedChunks = 0;
+    while (removedChunks < this.chunks.length && this.bytes + bytes.byteLength > this.maxBytes) {
+      const removedBytes = this.chunks[removedChunks++].byteLength;
       this.bytes -= removedBytes;
       droppedBytes += removedBytes;
+    }
+    if (removedChunks > 0) {
+      this.chunks.splice(0, removedChunks);
     }
     const chunk = new Uint8Array(
       bytes.byteLength > this.maxBytes ? bytes.subarray(bytes.byteLength - this.maxBytes) : bytes,
