@@ -19,7 +19,7 @@ describe("Worker Ghostty assets", () => {
         expect(expected, pathname).not.toBeNull();
         expect(actual, pathname).not.toBeNull();
         expect(actual!.contentType).toBe(expected!.contentType);
-        expect(Buffer.from(actual!.body)).toEqual(Buffer.from(expected!.body));
+        expect(Buffer.compare(actual!.body, expected!.body), pathname).toBe(0);
       }
     },
   );
