@@ -187,4 +187,3 @@ service to select default dimensions. Resize payloads always require real dimens
 - Replay, subscriber, and PTY output buffers are bounded.
 - Protocol frames and terminal dimensions are validated.
 - Authorization, public listeners, storage, and transcripts stay in consumers.
-

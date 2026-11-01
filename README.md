@@ -19,18 +19,18 @@ pnpm add node-pty
 ## Exports
 
 Import the entry point for your runtime. Browser and Worker entry points do not
-import Node.js built-ins.
+import Node.js built-ins. Subpaths below extend `@openclaw/libterminal`.
 
-| Entry point | Provides |
-| --- | --- |
-| `@openclaw/libterminal` | Shared terminal types and errors |
-| `/protocol` | Protocol v2 codecs and validation |
-| `/stream` | Bounded replay, fanout, and batching |
-| `/browser` | Ghostty WASM terminals and terminal hub client |
-| `/node` | Local PTYs, raw stdio, and Ghostty assets |
-| `/worker` | WebSocket bridging and control checks |
-| `/worker-assets` | Embedded Ghostty assets and HTTP responses |
-| `/testing` | Deterministic terminal test doubles |
+| Entry point             | Provides                                       |
+| ----------------------- | ---------------------------------------------- |
+| `@openclaw/libterminal` | Shared terminal types and errors               |
+| `/protocol`             | Protocol v2 codecs and validation              |
+| `/stream`               | Bounded replay, fanout, and batching           |
+| `/browser`              | Ghostty WASM terminals and terminal hub client |
+| `/node`                 | Local PTYs, raw stdio, and Ghostty assets      |
+| `/worker`               | WebSocket bridging and control checks          |
+| `/worker-assets`        | Embedded Ghostty assets and HTTP responses     |
+| `/testing`              | Deterministic terminal test doubles            |
 
 For example:
 
