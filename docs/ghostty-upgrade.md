@@ -5,10 +5,8 @@ Ghostty v1.4 through a maintained, published browser/WASM wrapper. The runtime
 remains pinned to `ghostty-web@0.4.0` until a stable Ghostty v1.4 tag and a stable
 compatible wrapper are both published. Do not fork or patch the C/WASM ABI here.
 
-As checked on September 14, 2026, Ghostty's `v1.4.0` tag was absent, npm's stable
-`ghostty-web` version was `0.4.0`, and upstream wrapper PRs
-[#169](https://github.com/coder/ghostty-web/pull/169) and
-[#182](https://github.com/coder/ghostty-web/pull/182) were still open. This is
+The current dependency pin and upgrade gates are separate. Check the upstream
+release and wrapper status when evaluating an upgrade. This guide describes
 validation groundwork, not a runtime upgrade or a performance improvement claim.
 
 ## Run the baseline
@@ -21,8 +19,8 @@ pnpm test:browser --grep 'record a baseline'
 
 The smoke server serves the built `dist/browser.js` with either
 `readGhosttyAsset()` (`/?assets=node`) or the built `readGhosttyWorkerAsset()`
-(`/?assets=worker`). The Worker case tests the embedded asset bytes in a browser;
-it does not emulate a deployed Cloudflare Worker. The lifecycle checks verify
+(`/?assets=worker`). The Worker case tests the embedded asset bytes in a browser.
+It does not emulate a deployed Cloudflare Worker. The lifecycle checks verify cancellation during startup,
 default read-only input, writable keyboard events, returning to read-only,
 explicit resize and its callback, fitting, and idempotent disposal. Unit tests
 also compare the Node and Worker module, WASM, and shim bytes exactly.
@@ -34,7 +32,7 @@ background. The test checks every retained line through the public terminal
 buffer, verifies a minimum retained history, and waits until the canvas's last
 row actually has the new background. This catches dropped writes, corrupted
 Unicode tails, and stalled rendering rather than accepting an already-nonblank
-canvas. Plain, Unicode/CJK, and escape-heavy byte counts differ; compare each
+canvas. Plain, Unicode/CJK, and escape-heavy byte counts differ. Compare each
 workload only with the same workload in another build.
 
 Every workload logs a `ghosttyBaseline` JSON object and attaches the full result
@@ -58,11 +56,11 @@ to catch retention of the entire 16,896-line workload while recording the actual
 maximum. This is a regression check for this fixed workload, not a general memory
 bound. Do not hide this behavior by adding a private ABI shim.
 
-Timing values are diagnostic; CI does not impose speed thresholds on the recorded
+Timing values are diagnostic. CI does not impose speed thresholds on the recorded
 metrics. Functional waits allow five seconds per batch and three minutes per
-workload test to detect hangs. Run baseline and candidate repeatedly on the same machine, browser,
-viewport, and workload. Preserve the raw JSON and record comparable results in
-the adoption PR. Shared CI runners are useful for behavior checks, not precise
+workload test to detect hangs.
+Run baseline and candidate repeatedly on the same machine, browser, viewport, and workload.
+Preserve the raw JSON and record comparable results in the adoption PR. Shared CI runners are useful for behavior checks, not precise
 cross-run performance comparisons.
 
 ## Completing the upgrade
@@ -75,6 +73,6 @@ and browser/Node/Worker asset contracts. Regenerate assets with
 Keep the OSC 10–12 compatibility responder until browser proof demonstrates
 that the replacement emits the required responses itself. Record comparable
 before/after measurements, including complete peak memory under bounded
-scrollback; the sampled JS heap diagnostic above does not satisfy that memory
+scrollback. The sampled JS heap diagnostic above does not satisfy that memory
 requirement. The issue remains open until the stable dependency is adopted and
 all its acceptance criteria have been verified.

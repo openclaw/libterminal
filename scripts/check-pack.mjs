@@ -56,6 +56,8 @@ try {
   const pack = JSON.parse(output);
   const [{ filename, files }] = Array.isArray(pack) ? pack : Object.values(pack);
   const expected = [
+    "docs/usage.md",
+    "docs/ghostty-upgrade.md",
     "dist/browser.d.ts",
     "dist/browser.js",
     "dist/index.d.ts",
