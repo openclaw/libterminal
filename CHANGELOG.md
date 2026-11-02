@@ -2,6 +2,12 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Route the GitHub issue chooser's community link through OpenClaw's Discord redirect with a repository placement tag.
+
 ## 0.3.11 - 2026-11-01
 
 **Highlights:** Preserve cancellation and terminal bytes across browser, Worker, and hub teardown; reduce buffer and asset overhead; ship focused integration guides.
