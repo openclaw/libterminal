@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+## 0.4.0 - 2026-11-03
+
+**Highlights:** Make renderer integration optional, expose renderer-neutral streaming, and preserve terminal identity, cancellation, ordering, and flow control across adapters.
+
 ### Fixed
 
 - Preserve explicitly null cancellation reasons in browser terminal startup and Node PTY creation.
