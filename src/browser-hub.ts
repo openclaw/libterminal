@@ -181,7 +181,10 @@ export class TerminalHubClient {
     }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      this.connect();
+      // The application's need for a connection can change during the delay.
+      if (this.shouldReconnect() && !this.closedByCaller) {
+        this.connect();
+      }
     }, this.options.reconnectDelayMs ?? 1500);
   }
 

@@ -504,6 +504,58 @@ describe("TerminalHubClient", () => {
     }
   });
 
+  it.each(["unused", "throws", "closes"])(
+    "rechecks reconnect eligibility when the delayed predicate %s",
+    async (mode) => {
+      vi.useFakeTimers();
+      const sockets: TestTerminalHubSocket[] = [];
+      const error = new Error("reconnect predicate failed");
+      const onError = vi.fn();
+      let delayed = false;
+      const client = new TerminalHubClient({
+        url: "wss://terminal.example",
+        reconnectDelayMs: 10,
+        shouldReconnect: () => {
+          if (!delayed) {
+            return true;
+          }
+          if (mode === "throws") {
+            throw error;
+          }
+          if (mode === "closes") {
+            client.close();
+            return true;
+          }
+          return false;
+        },
+        onError,
+        socketFactory: () => {
+          const socket = new TestTerminalHubSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      });
+      try {
+        client.connect();
+        sockets[0].open();
+        sockets[0].emitClose();
+        expect(vi.getTimerCount()).toBe(1);
+        delayed = true;
+
+        await vi.advanceTimersByTimeAsync(10);
+
+        expect(sockets).toHaveLength(1);
+        expect(vi.getTimerCount()).toBe(0);
+        if (mode === "throws") {
+          expect(onError).toHaveBeenCalledWith(error);
+        }
+      } finally {
+        client.close();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("does not let a stalled prior socket block frames after reconnecting", async () => {
     const sockets: TestTerminalHubSocket[] = [];
     const frames: string[] = [];
