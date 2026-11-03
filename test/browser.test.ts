@@ -67,6 +67,27 @@ describe("createGhosttyTerminal", () => {
     await expect(created).rejects.toBe(reason);
   });
 
+  it("preserves an explicit null abort reason during startup", async () => {
+    const abort = new AbortController();
+    const dispose = vi.fn();
+    class Terminal extends TestGhosttyTerminal {
+      dispose = dispose;
+    }
+    await expect(
+      createGhosttyTerminal({
+        parent: {} as HTMLElement,
+        runtime: { ghostty: {}, Terminal, FitAddon: TestGhosttyFitAddon } as never,
+        signal: abort.signal,
+        onStatus: ({ state }) => {
+          if (state === "ready") {
+            abort.abort(null);
+          }
+        },
+      }),
+    ).rejects.toBeNull();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it("removes the caller abort listener when the terminal is disposed", async () => {
     const listeners = new Set<() => void>();
     const signal = {

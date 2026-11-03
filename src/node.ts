@@ -386,7 +386,7 @@ async function findBrowserExternalAsset(distPath: string): Promise<string> {
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
-    throw signal.reason ?? new Error("The operation was aborted");
+    throw signal.reason;
   }
 }
 

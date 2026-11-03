@@ -14,6 +14,16 @@ import {
 import { collectTerminalOutput, terminalText } from "../src/testing.js";
 
 describe("spawnLocalPty", () => {
+  it("preserves an explicit null abort reason before spawning", async () => {
+    const abort = new AbortController();
+    abort.abort(null);
+    const driver = new FakePtyDriver();
+    await expect(
+      spawnLocalPty({ command: "sh", cwd: "/workspace", driver, signal: abort.signal }),
+    ).rejects.toBeNull();
+    expect(driver.spawnCalls).toBe(0);
+  });
+
   it("exchanges UTF-8 input and observes exit through the native PTY", async ({
     onTestFinished,
   }) => {
