@@ -161,6 +161,75 @@ describe("TerminalFanout", () => {
     expect((await iterator.next()).done).toBe(true);
   });
 
+  it("preserves publication order when an overflow callback publishes again", async () => {
+    const fanout = new TerminalFanout({
+      replayBytes: 0,
+      subscriberBufferBytes: 4,
+      onEvent: (event) => {
+        if (event.type === "subscriber-overflow") {
+          slow.close();
+          fanout.publish(bytes("b"));
+        }
+      },
+    });
+    const slow = fanout.subscribe("slow");
+    const fast = fanout.subscribe("fast")[Symbol.asyncIterator]();
+    fanout.publish(bytes("1234"));
+    await fast.next();
+
+    fanout.publish(bytes("a"));
+
+    expect((await fast.next()).value).toEqual(bytes("a"));
+    expect((await fast.next()).value).toEqual(bytes("b"));
+    fanout.close();
+  });
+
+  it("finishes publication when an overflow callback throws", async () => {
+    const failure = new Error("overflow callback failed");
+    const fanout = new TerminalFanout({
+      replayBytes: 0,
+      subscriberBufferBytes: 4,
+      onEvent: (event) => {
+        if (event.type === "subscriber-overflow") {
+          throw failure;
+        }
+      },
+    });
+    const slow = fanout.subscribe("slow")[Symbol.asyncIterator]();
+    const fast = fanout.subscribe("fast")[Symbol.asyncIterator]();
+    fanout.publish(bytes("1234"));
+    await fast.next();
+
+    expect(() => fanout.publish(bytes("5"))).toThrow(failure);
+
+    expect(fanout.subscriberCount).toBe(1);
+    expect((await fast.next()).value).toEqual(bytes("5"));
+    expect((await slow.next()).value).toEqual(bytes("1234"));
+    expect((await slow.next()).done).toBe(true);
+    fanout.close();
+  });
+
+  it("closes every subscriber before propagating a callback failure", async () => {
+    const failure = new Error("first close callback failed");
+    const notified: string[] = [];
+    const fanout = new TerminalFanout({
+      onEvent: (event) => {
+        notified.push(event.subscriberId);
+        throw notified.length === 1 ? failure : new Error("later callback failed");
+      },
+    });
+    const first = fanout.subscribe("first")[Symbol.asyncIterator]();
+    const second = fanout.subscribe("second")[Symbol.asyncIterator]();
+    const pending = [first.next(), second.next()];
+
+    expect(() => fanout.close()).toThrow(failure);
+
+    expect(fanout.subscriberCount).toBe(0);
+    expect(notified).toEqual(["first", "second"]);
+    expect((await Promise.all(pending)).every((result) => result.done)).toBe(true);
+    expect(() => fanout.close()).not.toThrow();
+  });
+
   it("disconnects slow subscribers without affecting other subscribers", async () => {
     const events: string[] = [];
     const fanout = new TerminalFanout({
