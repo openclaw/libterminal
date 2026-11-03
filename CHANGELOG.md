@@ -2,6 +2,12 @@
 
 All notable changes to `@openclaw/libterminal` will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Run full CodeQL scans daily instead of on every main push, preserving PR and manual analysis and protecting active scheduled scans from cancellation.
+
 ## 0.3.11 - 2026-11-01
 
 **Highlights:** Preserve cancellation and terminal bytes across browser, Worker, and hub teardown; reduce buffer and asset overhead; ship focused integration guides.
