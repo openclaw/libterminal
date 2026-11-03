@@ -57,6 +57,8 @@ export type TerminalSubscribe = {
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
+// Session IDs are opaque values: a leading U+FEFF is data, not a byte-order marker.
+const sessionIdDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const terminalMessageTypes = new Set<number>(Object.values(TerminalMessageType));
 
 export function encodeTerminalFrame(
@@ -145,7 +147,7 @@ export function decodeTerminalFrame(data: Uint8Array, limits?: TerminalFrameLimi
 
   let sessionId: string;
   try {
-    sessionId = textDecoder.decode(data.subarray(offset, offset + sessionIdLength));
+    sessionId = sessionIdDecoder.decode(data.subarray(offset, offset + sessionIdLength));
   } catch (cause) {
     throw new LibterminalError("invalid_frame", "terminal frame session id is not UTF-8", {
       cause,
