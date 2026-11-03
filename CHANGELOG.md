@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Preserve explicitly null cancellation reasons in browser terminal startup and Node PTY creation.
+
 - Recheck whether the application still needs a terminal hub connection when a delayed reconnect fires.
 
 - Split large Worker output acknowledgements into decodable chunks so flow-control accounting stays valid above one MiB.
