@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Recheck whether the application still needs a terminal hub connection when a delayed reconnect fires.
+
 - Split large Worker output acknowledgements into decodable chunks so flow-control accounting stays valid above one MiB.
 
 - Complete fanout delivery and teardown before event callbacks, preserving output order during reentrant publication and closing all subscribers when callbacks throw.
