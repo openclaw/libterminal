@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      ghostty-web:
-        specifier: 0.4.0
-        version: 0.4.0
     devDependencies:
       '@playwright/test':
         specifier: ^1.64.1
@@ -27,6 +23,12 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^5.0.5
         version: 5.0.5(vitest@5.0.5)
+      '@xterm/xterm':
+        specifier: 6.0.0
+        version: 6.0.0
+      ghostty-web:
+        specifier: 0.4.0
+        version: 0.4.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -641,6 +643,9 @@ packages:
 
   '@vitest/spy@5.0.5':
     resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
 
   '@yuku-core/binding-android-arm64@0.19.0':
     resolution: {integrity: sha512-wdL2XmTiZixAOaHk9Z0JJZ8u9Qm8d333Zjpc6gaxXFX+UR5BlsfxZ7a2+2Rm71pamppsPYGUGFq2oVLbh6DISw==}
@@ -1494,6 +1499,8 @@ snapshots:
       vite: 8.3.5(@types/node@26.6.6)
 
   '@vitest/spy@5.0.5': {}
+
+  '@xterm/xterm@6.0.0': {}
 
   '@yuku-core/binding-android-arm64@0.19.0':
     optional: true

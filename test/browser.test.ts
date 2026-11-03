@@ -112,6 +112,10 @@ describe("createGhosttyTerminal", () => {
 });
 
 describe("attachTerminalStream", () => {
+  it("keeps the browser export identical to the renderer-neutral stream export", async () => {
+    const stream = await import("../src/stream.js");
+    expect(attachTerminalStream).toBe(stream.attachTerminalStream);
+  });
   it.each([
     ["read", "sync"],
     ["read", "async"],

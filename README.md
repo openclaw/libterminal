@@ -10,6 +10,15 @@ pnpm add @openclaw/libterminal
 ```
 
 The Node.js adapters require Node.js `^22.18.0 || >=24.11.0`.
+For Ghostty rendering or Node-hosted Ghostty assets, install the pinned optional peer:
+
+```sh
+pnpm add ghostty-web@0.4.0
+```
+
+Stream and protocol consumers do not need a renderer. The self-contained
+`/worker-assets` export retains its embedded assets and also needs no peer.
+
 Install the optional PTY driver when using `spawnLocalPty()`:
 
 ```sh
