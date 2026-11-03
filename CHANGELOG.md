@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Discard queued stdio input when an attachment ends or fails, while still restoring the terminal without waiting for an active write.
+
 ### Changed
 
 - Run full CodeQL scans daily instead of on every main push, preserving PR and manual analysis and protecting active scheduled scans from cancellation.

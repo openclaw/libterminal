@@ -191,11 +191,12 @@ export async function attachLocalStdio(
       : Promise.race([operation, failure]);
   const waitForCleanup = <T>(operation: Promise<T>): Promise<T | typeof abortedResult> =>
     aborted ? Promise.race([aborted.promise, operation]) : operation;
+  let acceptingInput = true;
   let pendingInput = Promise.resolve();
   const writeInput = (data: Buffer | string) => {
     const bytes = typeof data === "string" ? textEncoder.encode(data) : new Uint8Array(data);
     pendingInput = pendingInput.then(async () => {
-      if (!options?.signal?.aborted) {
+      if (acceptingInput && !options?.signal?.aborted) {
         await terminal.write?.(bytes);
       }
     });
@@ -261,6 +262,8 @@ export async function attachLocalStdio(
       pendingOutput = undefined;
     }
   } finally {
+    // Queued input must not outlive the attachment, even when an active write is still pending.
+    acceptingInput = false;
     stdin.off("data", writeInput);
     stdin.off("error", rejectFailure);
     stdout.off("resize", handleResize);
