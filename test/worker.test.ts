@@ -5,6 +5,7 @@ import {
   bridgeWebSockets,
   decodeOutputAcknowledgement,
   normalizeWebSocketMessageData,
+  sendOutputAcknowledgement,
 } from "../src/worker.js";
 
 function acceptsNativeWebSocket(socket: WebSocket): void {
@@ -274,6 +275,40 @@ describe("bridgeWebSockets", () => {
     expect(bridge.rightOutputAcknowledgementBytes).toBe(0);
   });
 
+  it.each([false, true])(
+    "accounts for large output with immediate acknowledgements %s",
+    async (immediate) => {
+      const left = new FakeWebSocket();
+      const right = new FakeWebSocket();
+      const byteLength = 1024 * 1024 + 1;
+      const bridge = bridgeWebSockets(left, right, {
+        controlCheckIntervalMs: 0,
+        acknowledgeRightOutputImmediately: immediate,
+        forwardRightOutputAcknowledgements: !immediate,
+      });
+      try {
+        right.receive(new ArrayBuffer(byteLength));
+        await vi.waitFor(() => expect(left.sent).toHaveLength(1));
+        if (!immediate) {
+          const acknowledgements = new FakeWebSocket();
+          sendOutputAcknowledgement(acknowledgements, byteLength);
+          for (const acknowledgement of acknowledgements.sent) {
+            left.receive(acknowledgement);
+          }
+        }
+        await vi.waitFor(() => expect(right.sent).toHaveLength(2));
+        expect(right.sent.map((message) => decodeOutputAcknowledgement(message))).toEqual([
+          1024 * 1024,
+          1,
+        ]);
+        expect(bridge.rightOutputAcknowledgementBytes).toBe(0);
+      } finally {
+        bridge.close();
+        await bridge.completed;
+      }
+    },
+  );
+
   it("sanitizes abnormal peer close metadata", () => {
     const left = new FakeWebSocket();
     const right = new FakeWebSocket();
@@ -323,6 +358,18 @@ describe("bridgeWebSockets", () => {
 });
 
 describe("Worker message helpers", () => {
+  it.each([1024 * 1024, 1024 * 1024 + 1, 2 * 1024 * 1024 + 17])(
+    "emits decodable acknowledgements for %i bytes",
+    (bytes) => {
+      const socket = new FakeWebSocket();
+      sendOutputAcknowledgement(socket, bytes);
+      const counts = socket.sent.map((message) => decodeOutputAcknowledgement(message));
+      expect(counts.every((count) => count !== null)).toBe(true);
+      expect(counts.reduce<number>((total, count) => total + count!, 0)).toBe(bytes);
+      expect(counts).toHaveLength(Math.ceil(bytes / (1024 * 1024)));
+    },
+  );
+
   it("normalizes views without leaking unrelated backing-buffer bytes", async () => {
     const backing = Uint8Array.from([1, 2, 3, 4]);
     const normalized = await normalizeWebSocketMessageData(backing.subarray(1, 3));
