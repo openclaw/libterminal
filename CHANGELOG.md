@@ -20,6 +20,9 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Make Ghostty a pinned optional peer: renderer users install `ghostty-web@0.4.0`; stream/protocol-only installs no longer pull it in. Preserve embedded Worker assets.
+- Export the existing renderer-neutral `attachTerminalStream` from `/stream`, preserving `/browser`, with an xterm example and package/type/bundle footprint checks.
+
 - Run full CodeQL scans daily instead of on every main push, preserving PR and manual analysis and protecting active scheduled scans from cancellation.
 - Refresh Node.js types, tsdown, and WebSocket test tooling while preserving the dependency cooldown and supported Node.js versions. (#139, thanks @dependabot[bot])
 

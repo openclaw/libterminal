@@ -15,6 +15,47 @@ independent copies, so changing one cannot corrupt other readers or stored repla
 The exported testing helpers also copy recorded input and output bytes, including
 sources that reuse a `Buffer` between chunks.
 
+## Keep an existing renderer or transport
+
+`attachTerminalStream` accepts an ordered byte iterator and a synchronous
+`write(Uint8Array)` target. Import it from `/stream` to avoid Ghostty types and
+renderer dependencies. The `/browser` export remains available.
+
+```ts
+import { attachTerminalStream } from "@openclaw/libterminal/stream";
+
+await attachTerminalStream(existingTerminal, output, abort.signal);
+```
+
+[`examples/xterm.ts`](https://github.com/openclaw/libterminal/blob/main/examples/xterm.ts) connects an actual xterm instance and
+owns its cancellation/disposal. Add `@xterm/xterm` and its CSS in your app. Keep
+input authorization and your existing WebSocket/SSH transport in the app.
+Attachment writes in order but does not wait for asynchronous rendering to finish;
+use the renderer's completion callback when you need that guarantee.
+
+`spawnLocalPty({ driver })` already accepts an injected `PtyDriver`. Applications
+using a prebuilt or platform-specific PTY package can adapt its `spawn` result to
+that interface without adding another driver to libterminal.
+
+## Compatibility and footprint checks
+
+| Surface                | Automated check                                               |
+| ---------------------- | ------------------------------------------------------------- |
+| Node 22, 24, 26        | Package, unit tests and installed consumer in CI              |
+| Browser / Worker       | Existing Ghostty asset parity and Chromium tests              |
+| xterm                  | ANSI/UTF-8 rendering, cancellation and disposal in Chromium   |
+| Renderer-free consumer | Empty install, strict TypeScript declarations and Vite bundle |
+
+`pnpm pack:check` verifies that installing libterminal alone does not install
+Ghostty or node-pty. It reports compressed archive bytes, unpacked package bytes
+and compressed root, protocol, stream and Worker consumer bundles separately.
+Each portable entry must remain below 12 KB gzip and contain no
+Ghostty/embedded-asset modules.
+
+The root archive still contains `/worker-assets` for existing consumers. Moving
+that synchronous public export into a separate package requires a coordinated
+breaking release; optional peers do not remove those bytes from the archive.
+
 ## Browser
 
 Ghostty terminals default to read-only. The application owns authorization,

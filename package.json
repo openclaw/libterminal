@@ -85,15 +85,14 @@
     "test:coverage": "pnpm run test --coverage",
     "typecheck": "pnpm run generate:worker-assets && tsc --noEmit && tsc -p tsconfig.portable.json --noEmit"
   },
-  "dependencies": {
-    "ghostty-web": "0.4.0"
-  },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.0.5",
+    "@xterm/xterm": "6.0.0",
+    "ghostty-web": "0.4.0",
     "node-pty": "^1.1.0",
     "oxfmt": "^0.75.0",
     "oxlint": "^1.89.0",
@@ -105,10 +104,14 @@
     "ws": "^8.22.0"
   },
   "peerDependencies": {
+    "ghostty-web": "0.4.0",
     "node-pty": ">=1.0.0"
   },
   "peerDependenciesMeta": {
     "node-pty": {
+      "optional": true
+    },
+    "ghostty-web": {
       "optional": true
     }
   },

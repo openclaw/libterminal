@@ -1,6 +1,53 @@
+import { abortedResult, abortPromise } from "./abort.js";
 import { AsyncByteQueue } from "./byte-queue.js";
 import { concatenateBytes } from "./bytes.js";
 import { LibterminalError } from "./index.js";
+
+export type TerminalStreamTarget = {
+  write(bytes: Uint8Array): void;
+};
+
+export async function attachTerminalStream(
+  target: TerminalStreamTarget,
+  source: AsyncIterable<Uint8Array>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const iterator = source[Symbol.asyncIterator]();
+  const aborted = abortPromise(signal);
+  let completed = false;
+  try {
+    for (;;) {
+      if (signal?.aborted) {
+        return;
+      }
+      const result = aborted
+        ? await Promise.race([iterator.next(), aborted.promise])
+        : await iterator.next();
+      if (result === abortedResult || result.done) {
+        completed = result !== abortedResult;
+        return;
+      }
+      if (signal?.aborted) {
+        return;
+      }
+      target.write(result.value);
+    }
+  } finally {
+    if (!completed) {
+      try {
+        const returned = iterator.return?.();
+        if (aborted) {
+          await Promise.race([aborted.promise, returned]);
+        } else {
+          await returned;
+        }
+      } catch {
+        // Incomplete streams have already failed or been aborted; preserve that outcome.
+      }
+    }
+    aborted?.dispose();
+  }
+}
 
 export type SlowSubscriberPolicy = "disconnect" | "drop-oldest";
 

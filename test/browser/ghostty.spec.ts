@@ -220,7 +220,7 @@ for (const assets of ["node", "worker"]) {
       const pkg = JSON.parse(await readFile("package.json", "utf8"));
       const baseline = {
         schemaVersion: 1,
-        wrapper: pkg.dependencies["ghostty-web"],
+        wrapper: pkg.peerDependencies["ghostty-web"],
         assets,
         workload,
         browser: browser.version(),

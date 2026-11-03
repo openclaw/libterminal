@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -9,6 +10,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+import { build } from "vite";
 
 const workdir = mkdtempSync(join(tmpdir(), "libterminal-pack-"));
 const npmCommand = resolveNpmCli();
@@ -52,9 +56,11 @@ try {
       encoding: "utf8",
     }),
   );
-  /** @type {Array<{ filename: string; files: Array<{ path: string }> }> | Record<string, { filename: string; files: Array<{ path: string }> }>} */
+  /** @type {Array<{ filename: string; size: number; unpackedSize: number; files: Array<{ path: string }> }> | Record<string, { filename: string; size: number; unpackedSize: number; files: Array<{ path: string }> }>} */
   const pack = JSON.parse(output);
-  const [{ filename, files }] = Array.isArray(pack) ? pack : Object.values(pack);
+  const [{ filename, files, size, unpackedSize }] = Array.isArray(pack)
+    ? pack
+    : Object.values(pack);
   const expected = [
     "docs/usage.md",
     "docs/ghostty-upgrade.md",
@@ -94,6 +100,76 @@ try {
     cwd: workdir,
     stdio: "pipe",
   });
+  for (const name of ["ghostty-web", "node-pty"]) {
+    assert.equal(
+      existsSync(join(workdir, "node_modules", name)),
+      false,
+      `${name} must remain opt-in`,
+    );
+  }
+  const consumer = join(workdir, "consumer.ts");
+  writeFileSync(
+    consumer,
+    `import { attachTerminalStream } from "@openclaw/libterminal/stream";
+const output: AsyncIterable<Uint8Array> = { async *[Symbol.asyncIterator]() { yield new Uint8Array([65]); } };
+await attachTerminalStream({ write(bytes) { console.log(bytes); } }, output);
+`,
+  );
+  execFileSync(
+    process.execPath,
+    [
+      fileURLToPath(import.meta.resolve("typescript/lib/tsc.js")),
+      "--noEmit",
+      "--strict",
+      "--skipLibCheck",
+      "false",
+      "--target",
+      "es2023",
+      "--module",
+      "nodenext",
+      "--moduleResolution",
+      "nodenext",
+      consumer,
+    ],
+    { cwd: workdir, stdio: "pipe" },
+  );
+  /** @type {Record<string, number>} */
+  const gzipBytes = {};
+  for (const entry of ["", "/protocol", "/stream", "/worker"]) {
+    writeFileSync(
+      consumer,
+      `import * as api from "@openclaw/libterminal${entry}";
+globalThis.terminalApi = api;\n`,
+    );
+    const bundled = await build({
+      configFile: false,
+      root: workdir,
+      logLevel: "error",
+      build: { write: false, minify: true, lib: { entry: consumer, formats: ["es"] } },
+    });
+    const outputs = (Array.isArray(bundled) ? bundled : [bundled]).flatMap((result) => {
+      if (!("output" in result)) throw new Error("unexpected consumer build");
+      return result.output;
+    });
+    const chunks = outputs.filter((file) => file.type === "chunk");
+    for (const chunk of chunks) {
+      assert.ok(
+        !Object.keys(chunk.modules).some((id) => /ghostty|node-pty|worker-assets/.test(id)),
+        "renderer-free graph",
+      );
+    }
+    const bytes = gzipSync(chunks.map((chunk) => chunk.code).join("\n")).byteLength;
+    assert.ok(bytes < 12000, `${entry || "/"} grew to ${bytes} gzip bytes`);
+    gzipBytes[entry || "/"] = bytes;
+  }
+  console.log(
+    JSON.stringify({
+      packageBytes: size,
+      unpackedBytes: unpackedSize,
+      gzipBytes,
+      optionalDependenciesAbsent: ["ghostty-web", "node-pty"],
+    }),
+  );
   execFileSync(
     process.execPath,
     [

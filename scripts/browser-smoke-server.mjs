@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
+import { build } from "vite";
 import { readGhosttyAsset } from "../dist/node.js";
 import { readGhosttyWorkerAsset } from "../dist/worker-assets.js";
 
@@ -66,6 +67,28 @@ function html(assets) {
 </html>`;
 }
 
+const xtermBuild = await build({
+  configFile: false,
+  logLevel: "error",
+  build: {
+    write: false,
+    lib: { entry: "examples/xterm.ts", formats: ["es"], fileName: "xterm-example" },
+    minify: true,
+  },
+});
+const xtermOutputs = (Array.isArray(xtermBuild) ? xtermBuild : [xtermBuild]).flatMap((result) => {
+  if (!("output" in result)) throw new Error("unexpected example build");
+  return result.output;
+});
+const xtermScript = xtermOutputs.find((file) => file.type === "chunk");
+if (!xtermScript || xtermScript.type !== "chunk") throw new Error("missing xterm example");
+
+const xtermStyles = xtermOutputs
+  .flatMap((file) =>
+    file.type === "asset" && file.fileName.endsWith(".css") ? [String(file.source)] : [],
+  )
+  .join("\n");
+
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${host}:${port}`);
@@ -76,6 +99,22 @@ const server = createServer(async (request, response) => {
         html(url.searchParams.get("assets") === "worker" ? "worker" : "node"),
         "text/html; charset=utf-8",
       );
+      return;
+    }
+    if (pathname === "/xterm") {
+      send(
+        response,
+        '<!doctype html><meta charset="utf-8"><title>xterm example</title><link rel="stylesheet" href="/xterm-example.css">',
+        "text/html; charset=utf-8",
+      );
+      return;
+    }
+    if (pathname === "/xterm-example.css") {
+      send(response, xtermStyles, "text/css; charset=utf-8");
+      return;
+    }
+    if (pathname === "/xterm-example.js") {
+      send(response, xtermScript.code, "text/javascript; charset=utf-8");
       return;
     }
     const distFile = distScriptPath(pathname);
