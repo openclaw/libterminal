@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Fixed
 
+- Complete fanout delivery and teardown before event callbacks, preserving output order during reentrant publication and closing all subscribers when callbacks throw.
+
 - Preserve leading U+FEFF characters in terminal session IDs instead of routing frames under a different identity.
 
 - Discard queued stdio input when an attachment ends or fails, while still restoring the terminal without waiting for an active write.
