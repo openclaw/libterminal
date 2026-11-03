@@ -11,8 +11,56 @@ import {
   type DisposableLike,
   type PtyDriver,
 } from "../src/node.js";
+import { collectTerminalOutput, terminalText } from "../src/testing.js";
 
 describe("spawnLocalPty", () => {
+  it("exchanges UTF-8 input and observes exit through the native PTY", async ({
+    onTestFinished,
+  }) => {
+    let observed = "";
+    const decoder = new TextDecoder();
+    const session = await spawnLocalPty({
+      command: process.execPath,
+      args: [
+        "-e",
+        `
+          process.stdin.setRawMode(true);
+          process.stdin.setEncoding("utf8");
+          let input = "";
+          process.stdin.on("data", (chunk) => {
+            input += chunk;
+            if (input.endsWith("\\r")) {
+              process.stdout.write("PTY_INPUT:" + input.trim() + "\\n", () => process.exit(0));
+            }
+          });
+          process.stdout.write("PTY_READY:" + process.stdin.isTTY + ":" + process.stdout.isTTY + "\\n");
+        `,
+      ],
+      cwd: process.cwd(),
+      onOutput: (bytes) => {
+        observed += decoder.decode(bytes, { stream: true });
+      },
+    });
+    let exited = false;
+    void session.exit.then(() => {
+      exited = true;
+    });
+    onTestFinished(async () => {
+      if (!exited) {
+        session.kill();
+      }
+      await session.exit;
+    });
+    await vi.waitFor(() => expect(observed).toContain("PTY_READY:true:true"), { timeout: 5_000 });
+    const input = new TextEncoder().encode("hello €\r");
+    await session.write!(input.subarray(0, 7));
+    await session.write!(input.subarray(7));
+    await expect(session.exit).resolves.toMatchObject({ code: 0 });
+    const output = terminalText(await collectTerminalOutput(session.output));
+    expect(output).toContain("PTY_READY:true:true");
+    expect(output).toContain("PTY_INPUT:hello €");
+  }, 10_000);
+
   it("adapts an injected PTY driver into a terminal duplex", async () => {
     const fake = new FakePtyDriver();
     const outputs: string[] = [];
