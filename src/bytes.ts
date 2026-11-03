@@ -1,3 +1,12 @@
+export function hasArrayBuffer(value: unknown): value is { arrayBuffer(): Promise<ArrayBuffer> } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "arrayBuffer" in value &&
+    typeof value.arrayBuffer === "function"
+  );
+}
+
 export function concatenateBytes(
   chunks: readonly Uint8Array[],
   byteLength = chunks.reduce((total, chunk) => total + chunk.byteLength, 0),

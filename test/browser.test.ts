@@ -656,14 +656,20 @@ function never(): AsyncIterable<Uint8Array> {
   };
 }
 
+type TestTerminalHubListeners = {
+  open: () => void;
+  message: (event: { data: unknown }) => void;
+  close: (event: { code?: number; reason?: string }) => void;
+  error: () => void;
+};
+
 class TestTerminalHubSocket implements TerminalHubWebSocket {
   readyState = 0;
   binaryType?: string;
   readonly sent: Array<string | ArrayBuffer | ArrayBufferView | Blob> = [];
-  private readonly opens = new Set<() => void>();
-  private readonly messages = new Set<(event: { data: unknown }) => void>();
-  private readonly closes = new Set<(event: { code?: number; reason?: string }) => void>();
-  private readonly errors = new Set<() => void>();
+  private readonly listeners: {
+    [Type in keyof TestTerminalHubListeners]: Set<TestTerminalHubListeners[Type]>;
+  } = { open: new Set(), message: new Set(), close: new Set(), error: new Set() };
 
   send(data: string | ArrayBuffer | ArrayBufferView | Blob): void {
     this.sent.push(data);
@@ -673,58 +679,36 @@ class TestTerminalHubSocket implements TerminalHubWebSocket {
     this.emitClose(code, reason);
   }
 
-  addEventListener(
-    type: "open" | "message" | "close" | "error",
-    listener:
-      | (() => void)
-      | ((event: { data: unknown }) => void)
-      | ((event: { code?: number; reason?: string }) => void),
+  addEventListener<Type extends keyof TestTerminalHubListeners>(
+    type: Type,
+    listener: TestTerminalHubListeners[Type],
   ): void {
-    if (type === "open") {
-      this.opens.add(listener as () => void);
-    } else if (type === "message") {
-      this.messages.add(listener as (event: { data: unknown }) => void);
-    } else if (type === "close") {
-      this.closes.add(listener as (event: { code?: number; reason?: string }) => void);
-    } else {
-      this.errors.add(listener as () => void);
-    }
+    this.listeners[type].add(listener);
   }
 
-  removeEventListener(
-    type: "open" | "message" | "close" | "error",
-    listener:
-      | (() => void)
-      | ((event: { data: unknown }) => void)
-      | ((event: { code?: number; reason?: string }) => void),
+  removeEventListener<Type extends keyof TestTerminalHubListeners>(
+    type: Type,
+    listener: TestTerminalHubListeners[Type],
   ): void {
-    if (type === "open") {
-      this.opens.delete(listener as () => void);
-    } else if (type === "message") {
-      this.messages.delete(listener as (event: { data: unknown }) => void);
-    } else if (type === "close") {
-      this.closes.delete(listener as (event: { code?: number; reason?: string }) => void);
-    } else {
-      this.errors.delete(listener as () => void);
-    }
+    this.listeners[type].delete(listener);
   }
 
   open(): void {
     this.readyState = 1;
-    for (const listener of this.opens) {
+    for (const listener of this.listeners.open) {
       listener();
     }
   }
 
   receive(data: unknown): void {
-    for (const listener of this.messages) {
+    for (const listener of this.listeners.message) {
       listener({ data });
     }
   }
 
   emitClose(code = 1000, reason = ""): void {
     this.readyState = 3;
-    for (const listener of this.closes) {
+    for (const listener of this.listeners.close) {
       listener({ code, reason });
     }
   }
