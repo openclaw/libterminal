@@ -504,69 +504,66 @@ describe("attachLocalStdio", () => {
     }
   });
 
-  it("restores stdio after output completes without waiting forever for pending input", async () => {
-    const removed: string[] = [];
-    let paused = false;
-    let inputListener: (data: Buffer) => void = noop;
-    let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
-    const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve) => {
-      completeOutput = resolve;
-    });
-    let resolveWrite: () => void = noop;
-    let writeStarted: () => void = noop;
-    const writeStartedPromise = new Promise<void>((resolve) => {
-      writeStarted = resolve;
-    });
-    const stdin = {
-      isTTY: false,
-      readableFlowing: null,
-      on: (event: string, listener: (data: Buffer) => void) => {
-        if (event === "data") {
-          inputListener = listener;
-        }
-      },
-      off: (event: string) => removed.push(`stdin:${event}`),
-      pause: () => {
-        paused = true;
-      },
-    } as unknown as NodeJS.ReadStream;
-    const stdout = {
-      columns: 80,
-      rows: 24,
-      on: () => undefined,
-      off: (event: string) => removed.push(`stdout:${event}`),
-      write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
-        callback();
-        return true;
-      },
-    } as unknown as NodeJS.WriteStream;
-    const output = {
-      [Symbol.asyncIterator]: () => ({
-        next: () => outputResult,
-      }),
-    };
-    const attached = attachLocalStdio(
-      {
-        output,
-        close: async () => undefined,
-        write: async () => {
-          writeStarted();
-          await new Promise<void>((resolve) => {
-            resolveWrite = resolve;
-          });
+  it.each(["output completion", "output failure"])(
+    "discards queued stdin after %s without waiting for an active write",
+    async (phase) => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
+      let rejectOutput!: (error: Error) => void;
+      const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
+        completeOutput = resolve;
+        rejectOutput = reject;
+      });
+      let finishWrite!: () => void;
+      let startWrite!: () => void;
+      const writing = new Promise<void>((resolve) => {
+        startWrite = resolve;
+      });
+      const writes: string[] = [];
+      const attached = attachLocalStdio(
+        {
+          output: { [Symbol.asyncIterator]: () => ({ next: () => outputResult }) },
+          close: async () => {},
+          write: async (bytes) => {
+            writes.push(new TextDecoder().decode(bytes));
+            startWrite();
+            await new Promise<void>((resolve) => {
+              finishWrite = resolve;
+            });
+          },
         },
-      },
-      { stdin, stdout },
-    );
-
-    inputListener(Buffer.from("pending"));
-    await writeStartedPromise;
-    completeOutput({ done: true, value: undefined });
-    await attached;
-    expect(removed).toEqual(["stdin:data", "stdin:error", "stdout:resize", "stdout:error"]);
-    expect(paused).toBe(true);
-    resolveWrite();
-  });
+        {
+          stdin: stdin as unknown as NodeJS.ReadStream,
+          stdout: stdout as unknown as NodeJS.WriteStream,
+        },
+      );
+      stdin.write("pending");
+      stdin.write("queued");
+      await writing;
+      try {
+        if (phase === "output failure") {
+          const error = new Error("output failed");
+          rejectOutput(error);
+          await expect(attached).rejects.toBe(error);
+        } else {
+          completeOutput({ done: true, value: undefined });
+          await attached;
+        }
+        expect(stdin.listenerCount("data")).toBe(0);
+        expect(stdin.listenerCount("error")).toBe(0);
+        expect(stdout.listenerCount("resize")).toBe(0);
+        expect(stdout.listenerCount("error")).toBe(0);
+        expect(stdin.readableFlowing).toBe(false);
+      } finally {
+        finishWrite();
+        await setImmediate();
+        stdin.destroy();
+        stdout.destroy();
+      }
+      expect(writes).toEqual(["pending"]);
+    },
+  );
 
   it("rejects and restores stdio when writing stdin fails", async () => {
     const stdio = testStdio();
