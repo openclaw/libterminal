@@ -28,7 +28,8 @@ describe("BoundedReplayBuffer", () => {
     expect(text(replay.snapshot())).toBe("23456");
   });
 
-  it.each([20_000, 100_000])("trims %i fragmented chunks", (limit) => {
+  it("trims a large fragmented buffer", () => {
+    const limit = 100_000;
     const replay = new BoundedReplayBuffer(limit);
     for (let index = 0; index < limit; index += 1) {
       replay.append(new Uint8Array([index % 256]));
@@ -169,12 +170,18 @@ describe("TerminalFanout", () => {
       onEvent: (event) => events.push(event.type),
     });
     const slow = fanout.subscribe("slow", { replay: false });
+    const fast = fanout.subscribe("fast", { replay: false })[Symbol.asyncIterator]();
     fanout.publish(bytes("1234"));
+    expect((await fast.next()).value).toEqual(bytes("1234"));
     fanout.publish(bytes("5"));
     expect(events).toEqual(["subscriber-overflow", "subscriber-closed"]);
     const iterator = slow[Symbol.asyncIterator]();
     expect(new TextDecoder().decode((await iterator.next()).value)).toBe("1234");
     expect((await iterator.next()).done).toBe(true);
+    expect(fanout.subscriberCount).toBe(1);
+    expect((await fast.next()).value).toEqual(bytes("5"));
+    fanout.close();
+    expect((await fast.next()).done).toBe(true);
   });
 });
 
