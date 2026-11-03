@@ -79,11 +79,7 @@ describe("bridgeWebSockets", () => {
       },
       controlCheckIntervalMs: 10,
     });
-    const settled = await Promise.race([
-      bridge.completed.then(() => "done"),
-      new Promise((resolve) => setTimeout(() => resolve("hang"), 50)),
-    ]);
-    expect(settled).toBe("done");
+    await bridge.completed;
     expect(right.closed).toEqual({ code: 1000, reason: "peer closed" });
     expect(left.closed).toBeUndefined();
     expect(checks).toBe(0);

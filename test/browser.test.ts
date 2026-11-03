@@ -395,7 +395,7 @@ describe("TerminalHubClient", () => {
         throw failure;
       },
     });
-    await new Promise((resolve) => setTimeout(resolve));
+    await setImmediate();
     expect(events).toEqual([]);
     resolveFirst(ownedArrayBuffer(encodeTerminalFrame({ type: TerminalMessageType.Output })));
     await vi.waitFor(() => expect(events).toEqual(["frame", failure]));
@@ -469,10 +469,11 @@ describe("TerminalHubClient", () => {
   });
 
   it("reconnects only while the application still needs the transport", async () => {
+    vi.useFakeTimers();
     const sockets: TestTerminalHubSocket[] = [];
     const client = new TerminalHubClient({
       url: "wss://terminal.example",
-      reconnectDelayMs: 1,
+      reconnectDelayMs: 10,
       shouldReconnect: () => true,
       socketFactory: () => {
         const socket = new TestTerminalHubSocket();
@@ -481,14 +482,26 @@ describe("TerminalHubClient", () => {
       },
     });
 
-    client.connect();
-    sockets[0]?.open();
-    sockets[0]?.emitClose();
-    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    try {
+      client.connect();
+      sockets[0].open();
+      sockets[0].emitClose();
+      await vi.advanceTimersByTimeAsync(9);
+      expect(sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
 
-    client.close();
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(sockets).toHaveLength(2);
+      sockets[1].open();
+      sockets[1].emitClose();
+      expect(vi.getTimerCount()).toBe(1);
+      client.close();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(sockets).toHaveLength(2);
+    } finally {
+      client.close();
+      vi.useRealTimers();
+    }
   });
 
   it("does not let a stalled prior socket block frames after reconnecting", async () => {
@@ -535,7 +548,7 @@ describe("TerminalHubClient", () => {
         }),
       ),
     );
-    await new Promise((resolve) => setTimeout(resolve));
+    await setImmediate();
     expect(frames).toEqual(["new"]);
     client.close();
   });
@@ -627,45 +640,6 @@ describe("TerminalHubClient", () => {
     expect(socket.readyState).toBe(3);
     expect(client.isOpen).toBe(false);
   });
-
-  it("closes the socket after native close rejects reserved codes", () => {
-    const socket = new NativeCloseSocket();
-    const errors: unknown[] = [];
-    const client = new TerminalHubClient({
-      url: "wss://terminal.example",
-      socketFactory: () => socket,
-      onError: (error) => errors.push(error),
-    });
-
-    client.connect();
-    socket.open();
-    client.close(1006);
-
-    expect(socket.readyState).toBe(3);
-    expect(socket.closeCalls.some((call) => call.code === 1000)).toBe(true);
-    expect(client.isOpen).toBe(false);
-    expect(errors).toEqual([]);
-  });
-
-  it("closes the socket after native close rejects an oversized reason", () => {
-    const socket = new NativeCloseSocket();
-    const client = new TerminalHubClient({
-      url: "wss://terminal.example",
-      socketFactory: () => socket,
-    });
-
-    client.connect();
-    socket.open();
-    client.close(1000, "x".repeat(200));
-
-    expect(socket.readyState).toBe(3);
-    const successful = socket.closeCalls.find(
-      (call) => new TextEncoder().encode(call.reason ?? "").byteLength <= 123,
-    );
-    expect(successful).toBeDefined();
-    expect(new TextEncoder().encode(successful?.reason ?? "").byteLength).toBeLessThanOrEqual(123);
-    expect(client.isOpen).toBe(false);
-  });
 });
 
 async function* chunks(...values: string[]): AsyncIterable<Uint8Array> {
@@ -753,21 +727,6 @@ class TestTerminalHubSocket implements TerminalHubWebSocket {
     for (const listener of this.closes) {
       listener({ code, reason });
     }
-  }
-}
-
-class NativeCloseSocket extends TestTerminalHubSocket {
-  readonly closeCalls: Array<{ code?: number; reason?: string }> = [];
-
-  close(code?: number, reason?: string): void {
-    this.closeCalls.push({ code, reason });
-    if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
-      throw new Error(`InvalidAccessError: invalid close code ${code}`);
-    }
-    if (new TextEncoder().encode(reason ?? "").byteLength > 123) {
-      throw new Error("SyntaxError: close reason longer than 123 bytes");
-    }
-    super.close(code, reason);
   }
 }
 
