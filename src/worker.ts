@@ -1,3 +1,4 @@
+import { hasArrayBuffer } from "./bytes.js";
 import { LibterminalError } from "./index.js";
 import { cleanReason, safeClose } from "./websocket-close.js";
 
@@ -350,15 +351,6 @@ function closePair(left: WebSocketLike, right: WebSocketLike, code: number, reas
 
 function canClose(socket: WebSocketLike): boolean {
   return socket.readyState === WEB_SOCKET_OPEN || socket.readyState === WEB_SOCKET_CONNECTING;
-}
-
-function hasArrayBuffer(value: unknown): value is { arrayBuffer(): Promise<ArrayBuffer> } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "arrayBuffer" in value &&
-    typeof value.arrayBuffer === "function"
-  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
