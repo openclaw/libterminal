@@ -1,3 +1,4 @@
+import { hasArrayBuffer } from "./bytes.js";
 import { LibterminalError } from "./index.js";
 import { cleanReason, safeClose } from "./websocket-close.js";
 
@@ -48,6 +49,7 @@ export type WebSocketBridge = {
 };
 
 const encoder = new TextEncoder();
+const MAX_OUTPUT_ACKNOWLEDGEMENT_BYTES = 1024 * 1024;
 
 export function bridgeWebSockets(
   left: WebSocketLike,
@@ -278,7 +280,7 @@ export function decodeOutputAcknowledgement(value: WebSocketPayload): number | n
     return parsed.type === "ack" &&
       Number.isInteger(bytes) &&
       Number(bytes) > 0 &&
-      Number(bytes) <= 1024 * 1024
+      Number(bytes) <= MAX_OUTPUT_ACKNOWLEDGEMENT_BYTES
       ? Number(bytes)
       : null;
   } catch {
@@ -291,8 +293,14 @@ export function terminalMessageByteLength(value: WebSocketPayload): number {
 }
 
 export function sendOutputAcknowledgement(socket: WebSocketLike, bytes: number): void {
-  if (bytes > 0 && socket.readyState === WEB_SOCKET_OPEN) {
-    socket.send(JSON.stringify({ type: "ack", bytes }));
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) {
+    return;
+  }
+  // Each emitted acknowledgement must fit the same limit enforced by the decoder.
+  while (bytes > 0 && socket.readyState === WEB_SOCKET_OPEN) {
+    const acknowledgedBytes = Math.min(bytes, MAX_OUTPUT_ACKNOWLEDGEMENT_BYTES);
+    socket.send(JSON.stringify({ type: "ack", bytes: acknowledgedBytes }));
+    bytes -= acknowledgedBytes;
   }
 }
 
@@ -350,15 +358,6 @@ function closePair(left: WebSocketLike, right: WebSocketLike, code: number, reas
 
 function canClose(socket: WebSocketLike): boolean {
   return socket.readyState === WEB_SOCKET_OPEN || socket.readyState === WEB_SOCKET_CONNECTING;
-}
-
-function hasArrayBuffer(value: unknown): value is { arrayBuffer(): Promise<ArrayBuffer> } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "arrayBuffer" in value &&
-    typeof value.arrayBuffer === "function"
-  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

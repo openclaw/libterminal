@@ -1,6 +1,53 @@
+import { abortedResult, abortPromise } from "./abort.js";
 import { AsyncByteQueue } from "./byte-queue.js";
 import { concatenateBytes } from "./bytes.js";
 import { LibterminalError } from "./index.js";
+
+export type TerminalStreamTarget = {
+  write(bytes: Uint8Array): void;
+};
+
+export async function attachTerminalStream(
+  target: TerminalStreamTarget,
+  source: AsyncIterable<Uint8Array>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const iterator = source[Symbol.asyncIterator]();
+  const aborted = abortPromise(signal);
+  let completed = false;
+  try {
+    for (;;) {
+      if (signal?.aborted) {
+        return;
+      }
+      const result = aborted
+        ? await Promise.race([iterator.next(), aborted.promise])
+        : await iterator.next();
+      if (result === abortedResult || result.done) {
+        completed = result !== abortedResult;
+        return;
+      }
+      if (signal?.aborted) {
+        return;
+      }
+      target.write(result.value);
+    }
+  } finally {
+    if (!completed) {
+      try {
+        const returned = iterator.return?.();
+        if (aborted) {
+          await Promise.race([aborted.promise, returned]);
+        } else {
+          await returned;
+        }
+      } catch {
+        // Incomplete streams have already failed or been aborted; preserve that outcome.
+      }
+    }
+    aborted?.dispose();
+  }
+}
 
 export type SlowSubscriberPolicy = "disconnect" | "drop-oldest";
 
@@ -113,23 +160,32 @@ export class TerminalFanout {
       return;
     }
     this.replay.append(bytes);
-    // Callbacks can replace subscribers during publication.
+    // Finish queue mutations before callbacks can publish again or replace subscribers.
     const subscribers = [...this.subscribers];
+    const events: FanoutEvent[] = [];
     for (const [subscriberId, subscriber] of subscribers) {
       const droppedBytes = subscriber.enqueue(bytes, this.slowSubscriberPolicy);
       if (droppedBytes === 0) {
         continue;
       }
-      this.onEvent?.({
+      events.push({
         type: "subscriber-overflow",
         subscriberId,
         droppedBytes,
         policy: this.slowSubscriberPolicy,
       });
       if (this.slowSubscriberPolicy === "disconnect") {
-        this.removeSubscriber(subscriberId, subscriber, "subscriber buffer overflow");
+        const closed = this.removeSubscriber(
+          subscriberId,
+          subscriber,
+          "subscriber buffer overflow",
+        );
+        if (closed) {
+          events.push(closed);
+        }
       }
     }
+    this.notify(events);
   }
 
   subscribe(id: string, options?: { replay?: boolean }): TerminalSubscription {
@@ -150,7 +206,12 @@ export class TerminalFanout {
     return {
       id,
       [Symbol.asyncIterator]: () => subscriber,
-      close: (reason?: string) => this.removeSubscriber(id, subscriber, reason),
+      close: (reason?: string) => {
+        const event = this.removeSubscriber(id, subscriber, reason);
+        if (event) {
+          this.notify([event]);
+        }
+      },
     };
   }
 
@@ -159,19 +220,46 @@ export class TerminalFanout {
       return;
     }
     this.closed = true;
+    const events: FanoutEvent[] = [];
     for (const [subscriberId, subscriber] of this.subscribers) {
-      this.removeSubscriber(subscriberId, subscriber, reason);
+      const event = this.removeSubscriber(subscriberId, subscriber, reason);
+      if (event) {
+        events.push(event);
+      }
     }
     this.replay.clear();
+    this.notify(events);
   }
 
-  private removeSubscriber(id: string, subscriber: AsyncByteQueue, reason?: string): void {
+  private removeSubscriber(
+    id: string,
+    subscriber: AsyncByteQueue,
+    reason?: string,
+  ): FanoutEvent | undefined {
     if (this.subscribers.get(id) !== subscriber) {
-      return;
+      return undefined;
     }
     this.subscribers.delete(id);
     subscriber.close();
-    this.onEvent?.({ type: "subscriber-closed", subscriberId: id, reason });
+    return { type: "subscriber-closed", subscriberId: id, reason };
+  }
+
+  private notify(events: FanoutEvent[]): void {
+    let failed = false;
+    let failure: unknown;
+    for (const event of events) {
+      try {
+        this.onEvent?.(event);
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          failure = error;
+        }
+      }
+    }
+    if (failed) {
+      throw failure;
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import protocol from "../protocol/terminal-v2.json";
 import { LibterminalError } from "../src/index.js";
 import {
   decodeAckPayload,
+  decodeJsonPayload,
   decodeResizePayload,
   decodeSubscribePayload,
   decodeTerminalFrame,
@@ -59,6 +60,19 @@ describe("terminal protocol v2", () => {
     });
     expect(decodeResizePayload(fromHex(vectors.resize))).toEqual({ columns: 132, rows: 43 });
     expect(decodeAckPayload(fromHex(vectors.ack))).toBe(65_535);
+  });
+
+  it.each(["\uFEFFsession", "\uFEFF", "\uFEFF\uFEFFsession", "終端🙂"])(
+    "preserves the exact session identity %j",
+    (sessionId) => {
+      const frame = encodeTerminalFrame({ type: TerminalMessageType.Input, sessionId });
+      expect(decodeTerminalFrame(frame).sessionId).toBe(sessionId);
+    },
+  );
+
+  it("keeps JSON byte-order marker handling separate from session identities", () => {
+    const payload = new TextEncoder().encode('\uFEFF{"ready":true}');
+    expect(decodeJsonPayload(payload)).toEqual({ ready: true });
   });
 
   it("allows default subscribe dimensions without relaxing resize validation", () => {

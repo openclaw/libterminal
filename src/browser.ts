@@ -5,7 +5,9 @@ import type {
   ITerminalOptions,
   Terminal,
 } from "ghostty-web";
-import { abortedResult, abortPromise } from "./abort.js";
+import { attachTerminalStream } from "./stream.js";
+
+export { attachTerminalStream } from "./stream.js";
 import { assertTerminalSize, LibterminalError, type TerminalSize } from "./index.js";
 
 export {
@@ -129,48 +131,6 @@ export async function createGhosttyTerminal(
     throw new LibterminalError("ghostty_unavailable", "failed to create Ghostty browser terminal", {
       cause,
     });
-  }
-}
-
-export async function attachTerminalStream(
-  target: Pick<Terminal, "write">,
-  source: AsyncIterable<Uint8Array>,
-  signal?: AbortSignal,
-): Promise<void> {
-  const iterator = source[Symbol.asyncIterator]();
-  const aborted = abortPromise(signal);
-  let completed = false;
-  try {
-    for (;;) {
-      if (signal?.aborted) {
-        return;
-      }
-      const result = aborted
-        ? await Promise.race([iterator.next(), aborted.promise])
-        : await iterator.next();
-      if (result === abortedResult || result.done) {
-        completed = result !== abortedResult;
-        return;
-      }
-      if (signal?.aborted) {
-        return;
-      }
-      target.write(result.value);
-    }
-  } finally {
-    if (!completed) {
-      try {
-        const returned = iterator.return?.();
-        if (aborted) {
-          await Promise.race([aborted.promise, returned]);
-        } else {
-          await returned;
-        }
-      } catch {
-        // Incomplete streams have already failed or been aborted; preserve that outcome.
-      }
-    }
-    aborted?.dispose();
   }
 }
 
@@ -304,7 +264,7 @@ async function loadRuntimeFromModule(
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
-    throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+    throw signal.reason;
   }
 }
 

@@ -1,3 +1,4 @@
+import { hasArrayBuffer } from "./bytes.js";
 import {
   TerminalMessageType,
   encodeTerminalFrame,
@@ -180,7 +181,10 @@ export class TerminalHubClient {
     }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      this.connect();
+      // The application's need for a connection can change during the delay.
+      if (this.shouldReconnect() && !this.closedByCaller) {
+        this.connect();
+      }
     }, this.options.reconnectDelayMs ?? 1500);
   }
 
@@ -232,15 +236,6 @@ async function terminalFrameBytes(data: unknown): Promise<Uint8Array> {
     return new Uint8Array(new Uint8Array(await data.arrayBuffer()));
   }
   return textEncoder.encode(String(data));
-}
-
-function hasArrayBuffer(value: unknown): value is { arrayBuffer(): Promise<ArrayBuffer> } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "arrayBuffer" in value &&
-    typeof value.arrayBuffer === "function"
-  );
 }
 
 function noop(): void {}

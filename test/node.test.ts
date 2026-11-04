@@ -11,8 +11,66 @@ import {
   type DisposableLike,
   type PtyDriver,
 } from "../src/node.js";
+import { collectTerminalOutput, terminalText } from "../src/testing.js";
 
 describe("spawnLocalPty", () => {
+  it("preserves an explicit null abort reason before spawning", async () => {
+    const abort = new AbortController();
+    abort.abort(null);
+    const driver = new FakePtyDriver();
+    await expect(
+      spawnLocalPty({ command: "sh", cwd: "/workspace", driver, signal: abort.signal }),
+    ).rejects.toBeNull();
+    expect(driver.spawnCalls).toBe(0);
+  });
+
+  it("exchanges UTF-8 input and observes exit through the native PTY", async ({
+    onTestFinished,
+  }) => {
+    let observed = "";
+    const decoder = new TextDecoder();
+    const session = await spawnLocalPty({
+      command: process.execPath,
+      args: [
+        "-e",
+        `
+          process.stdin.setRawMode(true);
+          process.stdin.setEncoding("utf8");
+          let input = "";
+          process.stdin.on("data", (chunk) => {
+            input += chunk;
+            if (input.endsWith("\\r")) {
+              process.stdout.write("PTY_INPUT:" + input.trim() + "\\n", () => process.exit(0));
+            }
+          });
+          process.stdout.write("PTY_READY:" + process.stdin.isTTY + ":" + process.stdout.isTTY + "\\n");
+        `,
+      ],
+      cwd: process.cwd(),
+      onOutput: (bytes) => {
+        observed += decoder.decode(bytes, { stream: true });
+      },
+    });
+    let exited = false;
+    void session.exit.then(() => {
+      exited = true;
+    });
+    onTestFinished(async () => {
+      if (!exited) {
+        session.kill();
+      }
+      await session.exit;
+    });
+    await vi.waitFor(() => expect(observed).toContain("PTY_READY:true:true"), { timeout: 5_000 });
+    const input = new TextEncoder().encode("hello €\r");
+    await session.write!(input.subarray(0, 7));
+    await session.write!(input.subarray(7));
+    await expect(session.exit).resolves.toMatchObject({ code: 0 });
+    const output = terminalText(await collectTerminalOutput(session.output));
+    expect(output).toContain("PTY_READY:true:true");
+    expect(output).toContain("PTY_INPUT:hello €");
+  }, 10_000);
+
   it("adapts an injected PTY driver into a terminal duplex", async () => {
     const fake = new FakePtyDriver();
     const outputs: string[] = [];
@@ -456,69 +514,66 @@ describe("attachLocalStdio", () => {
     }
   });
 
-  it("restores stdio after output completes without waiting forever for pending input", async () => {
-    const removed: string[] = [];
-    let paused = false;
-    let inputListener: (data: Buffer) => void = noop;
-    let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
-    const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve) => {
-      completeOutput = resolve;
-    });
-    let resolveWrite: () => void = noop;
-    let writeStarted: () => void = noop;
-    const writeStartedPromise = new Promise<void>((resolve) => {
-      writeStarted = resolve;
-    });
-    const stdin = {
-      isTTY: false,
-      readableFlowing: null,
-      on: (event: string, listener: (data: Buffer) => void) => {
-        if (event === "data") {
-          inputListener = listener;
-        }
-      },
-      off: (event: string) => removed.push(`stdin:${event}`),
-      pause: () => {
-        paused = true;
-      },
-    } as unknown as NodeJS.ReadStream;
-    const stdout = {
-      columns: 80,
-      rows: 24,
-      on: () => undefined,
-      off: (event: string) => removed.push(`stdout:${event}`),
-      write: (_bytes: Uint8Array, callback: (error?: Error | null) => void) => {
-        callback();
-        return true;
-      },
-    } as unknown as NodeJS.WriteStream;
-    const output = {
-      [Symbol.asyncIterator]: () => ({
-        next: () => outputResult,
-      }),
-    };
-    const attached = attachLocalStdio(
-      {
-        output,
-        close: async () => undefined,
-        write: async () => {
-          writeStarted();
-          await new Promise<void>((resolve) => {
-            resolveWrite = resolve;
-          });
+  it.each(["output completion", "output failure"])(
+    "discards queued stdin after %s without waiting for an active write",
+    async (phase) => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let completeOutput!: (result: IteratorResult<Uint8Array>) => void;
+      let rejectOutput!: (error: Error) => void;
+      const outputResult = new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
+        completeOutput = resolve;
+        rejectOutput = reject;
+      });
+      let finishWrite!: () => void;
+      let startWrite!: () => void;
+      const writing = new Promise<void>((resolve) => {
+        startWrite = resolve;
+      });
+      const writes: string[] = [];
+      const attached = attachLocalStdio(
+        {
+          output: { [Symbol.asyncIterator]: () => ({ next: () => outputResult }) },
+          close: async () => {},
+          write: async (bytes) => {
+            writes.push(new TextDecoder().decode(bytes));
+            startWrite();
+            await new Promise<void>((resolve) => {
+              finishWrite = resolve;
+            });
+          },
         },
-      },
-      { stdin, stdout },
-    );
-
-    inputListener(Buffer.from("pending"));
-    await writeStartedPromise;
-    completeOutput({ done: true, value: undefined });
-    await attached;
-    expect(removed).toEqual(["stdin:data", "stdin:error", "stdout:resize", "stdout:error"]);
-    expect(paused).toBe(true);
-    resolveWrite();
-  });
+        {
+          stdin: stdin as unknown as NodeJS.ReadStream,
+          stdout: stdout as unknown as NodeJS.WriteStream,
+        },
+      );
+      stdin.write("pending");
+      stdin.write("queued");
+      await writing;
+      try {
+        if (phase === "output failure") {
+          const error = new Error("output failed");
+          rejectOutput(error);
+          await expect(attached).rejects.toBe(error);
+        } else {
+          completeOutput({ done: true, value: undefined });
+          await attached;
+        }
+        expect(stdin.listenerCount("data")).toBe(0);
+        expect(stdin.listenerCount("error")).toBe(0);
+        expect(stdout.listenerCount("resize")).toBe(0);
+        expect(stdout.listenerCount("error")).toBe(0);
+        expect(stdin.readableFlowing).toBe(false);
+      } finally {
+        finishWrite();
+        await setImmediate();
+        stdin.destroy();
+        stdout.destroy();
+      }
+      expect(writes).toEqual(["pending"]);
+    },
+  );
 
   it("rejects and restores stdio when writing stdin fails", async () => {
     const stdio = testStdio();

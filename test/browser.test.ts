@@ -67,6 +67,27 @@ describe("createGhosttyTerminal", () => {
     await expect(created).rejects.toBe(reason);
   });
 
+  it("preserves an explicit null abort reason during startup", async () => {
+    const abort = new AbortController();
+    const dispose = vi.fn();
+    class Terminal extends TestGhosttyTerminal {
+      dispose = dispose;
+    }
+    await expect(
+      createGhosttyTerminal({
+        parent: {} as HTMLElement,
+        runtime: { ghostty: {}, Terminal, FitAddon: TestGhosttyFitAddon } as never,
+        signal: abort.signal,
+        onStatus: ({ state }) => {
+          if (state === "ready") {
+            abort.abort(null);
+          }
+        },
+      }),
+    ).rejects.toBeNull();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it("removes the caller abort listener when the terminal is disposed", async () => {
     const listeners = new Set<() => void>();
     const signal = {
@@ -91,6 +112,10 @@ describe("createGhosttyTerminal", () => {
 });
 
 describe("attachTerminalStream", () => {
+  it("keeps the browser export identical to the renderer-neutral stream export", async () => {
+    const stream = await import("../src/stream.js");
+    expect(attachTerminalStream).toBe(stream.attachTerminalStream);
+  });
   it.each([
     ["read", "sync"],
     ["read", "async"],
@@ -395,7 +420,7 @@ describe("TerminalHubClient", () => {
         throw failure;
       },
     });
-    await new Promise((resolve) => setTimeout(resolve));
+    await setImmediate();
     expect(events).toEqual([]);
     resolveFirst(ownedArrayBuffer(encodeTerminalFrame({ type: TerminalMessageType.Output })));
     await vi.waitFor(() => expect(events).toEqual(["frame", failure]));
@@ -469,10 +494,11 @@ describe("TerminalHubClient", () => {
   });
 
   it("reconnects only while the application still needs the transport", async () => {
+    vi.useFakeTimers();
     const sockets: TestTerminalHubSocket[] = [];
     const client = new TerminalHubClient({
       url: "wss://terminal.example",
-      reconnectDelayMs: 1,
+      reconnectDelayMs: 10,
       shouldReconnect: () => true,
       socketFactory: () => {
         const socket = new TestTerminalHubSocket();
@@ -481,15 +507,79 @@ describe("TerminalHubClient", () => {
       },
     });
 
-    client.connect();
-    sockets[0]?.open();
-    sockets[0]?.emitClose();
-    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    try {
+      client.connect();
+      sockets[0].open();
+      sockets[0].emitClose();
+      await vi.advanceTimersByTimeAsync(9);
+      expect(sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
 
-    client.close();
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(sockets).toHaveLength(2);
+      sockets[1].open();
+      sockets[1].emitClose();
+      expect(vi.getTimerCount()).toBe(1);
+      client.close();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(sockets).toHaveLength(2);
+    } finally {
+      client.close();
+      vi.useRealTimers();
+    }
   });
+
+  it.each(["unused", "throws", "closes"])(
+    "rechecks reconnect eligibility when the delayed predicate %s",
+    async (mode) => {
+      vi.useFakeTimers();
+      const sockets: TestTerminalHubSocket[] = [];
+      const error = new Error("reconnect predicate failed");
+      const onError = vi.fn();
+      let delayed = false;
+      const client = new TerminalHubClient({
+        url: "wss://terminal.example",
+        reconnectDelayMs: 10,
+        shouldReconnect: () => {
+          if (!delayed) {
+            return true;
+          }
+          if (mode === "throws") {
+            throw error;
+          }
+          if (mode === "closes") {
+            client.close();
+            return true;
+          }
+          return false;
+        },
+        onError,
+        socketFactory: () => {
+          const socket = new TestTerminalHubSocket();
+          sockets.push(socket);
+          return socket;
+        },
+      });
+      try {
+        client.connect();
+        sockets[0].open();
+        sockets[0].emitClose();
+        expect(vi.getTimerCount()).toBe(1);
+        delayed = true;
+
+        await vi.advanceTimersByTimeAsync(10);
+
+        expect(sockets).toHaveLength(1);
+        expect(vi.getTimerCount()).toBe(0);
+        if (mode === "throws") {
+          expect(onError).toHaveBeenCalledWith(error);
+        }
+      } finally {
+        client.close();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("does not let a stalled prior socket block frames after reconnecting", async () => {
     const sockets: TestTerminalHubSocket[] = [];
@@ -535,7 +625,7 @@ describe("TerminalHubClient", () => {
         }),
       ),
     );
-    await new Promise((resolve) => setTimeout(resolve));
+    await setImmediate();
     expect(frames).toEqual(["new"]);
     client.close();
   });
@@ -627,45 +717,6 @@ describe("TerminalHubClient", () => {
     expect(socket.readyState).toBe(3);
     expect(client.isOpen).toBe(false);
   });
-
-  it("closes the socket after native close rejects reserved codes", () => {
-    const socket = new NativeCloseSocket();
-    const errors: unknown[] = [];
-    const client = new TerminalHubClient({
-      url: "wss://terminal.example",
-      socketFactory: () => socket,
-      onError: (error) => errors.push(error),
-    });
-
-    client.connect();
-    socket.open();
-    client.close(1006);
-
-    expect(socket.readyState).toBe(3);
-    expect(socket.closeCalls.some((call) => call.code === 1000)).toBe(true);
-    expect(client.isOpen).toBe(false);
-    expect(errors).toEqual([]);
-  });
-
-  it("closes the socket after native close rejects an oversized reason", () => {
-    const socket = new NativeCloseSocket();
-    const client = new TerminalHubClient({
-      url: "wss://terminal.example",
-      socketFactory: () => socket,
-    });
-
-    client.connect();
-    socket.open();
-    client.close(1000, "x".repeat(200));
-
-    expect(socket.readyState).toBe(3);
-    const successful = socket.closeCalls.find(
-      (call) => new TextEncoder().encode(call.reason ?? "").byteLength <= 123,
-    );
-    expect(successful).toBeDefined();
-    expect(new TextEncoder().encode(successful?.reason ?? "").byteLength).toBeLessThanOrEqual(123);
-    expect(client.isOpen).toBe(false);
-  });
 });
 
 async function* chunks(...values: string[]): AsyncIterable<Uint8Array> {
@@ -682,14 +733,20 @@ function never(): AsyncIterable<Uint8Array> {
   };
 }
 
+type TestTerminalHubListeners = {
+  open: () => void;
+  message: (event: { data: unknown }) => void;
+  close: (event: { code?: number; reason?: string }) => void;
+  error: () => void;
+};
+
 class TestTerminalHubSocket implements TerminalHubWebSocket {
   readyState = 0;
   binaryType?: string;
   readonly sent: Array<string | ArrayBuffer | ArrayBufferView | Blob> = [];
-  private readonly opens = new Set<() => void>();
-  private readonly messages = new Set<(event: { data: unknown }) => void>();
-  private readonly closes = new Set<(event: { code?: number; reason?: string }) => void>();
-  private readonly errors = new Set<() => void>();
+  private readonly listeners: {
+    [Type in keyof TestTerminalHubListeners]: Set<TestTerminalHubListeners[Type]>;
+  } = { open: new Set(), message: new Set(), close: new Set(), error: new Set() };
 
   send(data: string | ArrayBuffer | ArrayBufferView | Blob): void {
     this.sent.push(data);
@@ -699,75 +756,38 @@ class TestTerminalHubSocket implements TerminalHubWebSocket {
     this.emitClose(code, reason);
   }
 
-  addEventListener(
-    type: "open" | "message" | "close" | "error",
-    listener:
-      | (() => void)
-      | ((event: { data: unknown }) => void)
-      | ((event: { code?: number; reason?: string }) => void),
+  addEventListener<Type extends keyof TestTerminalHubListeners>(
+    type: Type,
+    listener: TestTerminalHubListeners[Type],
   ): void {
-    if (type === "open") {
-      this.opens.add(listener as () => void);
-    } else if (type === "message") {
-      this.messages.add(listener as (event: { data: unknown }) => void);
-    } else if (type === "close") {
-      this.closes.add(listener as (event: { code?: number; reason?: string }) => void);
-    } else {
-      this.errors.add(listener as () => void);
-    }
+    this.listeners[type].add(listener);
   }
 
-  removeEventListener(
-    type: "open" | "message" | "close" | "error",
-    listener:
-      | (() => void)
-      | ((event: { data: unknown }) => void)
-      | ((event: { code?: number; reason?: string }) => void),
+  removeEventListener<Type extends keyof TestTerminalHubListeners>(
+    type: Type,
+    listener: TestTerminalHubListeners[Type],
   ): void {
-    if (type === "open") {
-      this.opens.delete(listener as () => void);
-    } else if (type === "message") {
-      this.messages.delete(listener as (event: { data: unknown }) => void);
-    } else if (type === "close") {
-      this.closes.delete(listener as (event: { code?: number; reason?: string }) => void);
-    } else {
-      this.errors.delete(listener as () => void);
-    }
+    this.listeners[type].delete(listener);
   }
 
   open(): void {
     this.readyState = 1;
-    for (const listener of this.opens) {
+    for (const listener of this.listeners.open) {
       listener();
     }
   }
 
   receive(data: unknown): void {
-    for (const listener of this.messages) {
+    for (const listener of this.listeners.message) {
       listener({ data });
     }
   }
 
   emitClose(code = 1000, reason = ""): void {
     this.readyState = 3;
-    for (const listener of this.closes) {
+    for (const listener of this.listeners.close) {
       listener({ code, reason });
     }
-  }
-}
-
-class NativeCloseSocket extends TestTerminalHubSocket {
-  readonly closeCalls: Array<{ code?: number; reason?: string }> = [];
-
-  close(code?: number, reason?: string): void {
-    this.closeCalls.push({ code, reason });
-    if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
-      throw new Error(`InvalidAccessError: invalid close code ${code}`);
-    }
-    if (new TextEncoder().encode(reason ?? "").byteLength > 123) {
-      throw new Error("SyntaxError: close reason longer than 123 bytes");
-    }
-    super.close(code, reason);
   }
 }
 

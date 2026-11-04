@@ -8,6 +8,32 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 - Route the GitHub issue chooser's community link through OpenClaw's Discord redirect with a repository placement tag.
 
+## 0.4.0 - 2026-11-03
+
+**Highlights:** Make renderer integration optional, expose renderer-neutral streaming, and preserve terminal identity, cancellation, ordering, and flow control across adapters.
+
+### Fixed
+
+- Preserve explicitly null cancellation reasons in browser terminal startup and Node PTY creation.
+
+- Recheck whether the application still needs a terminal hub connection when a delayed reconnect fires.
+
+- Split large Worker output acknowledgements into decodable chunks so flow-control accounting stays valid above one MiB.
+
+- Complete fanout delivery and teardown before event callbacks, preserving output order during reentrant publication and closing all subscribers when callbacks throw.
+
+- Preserve leading U+FEFF characters in terminal session IDs instead of routing frames under a different identity.
+
+- Discard queued stdio input when an attachment ends or fails, while still restoring the terminal without waiting for an active write.
+
+### Changed
+
+- Make Ghostty a pinned optional peer: renderer users install `ghostty-web@0.4.0`; stream/protocol-only installs no longer pull it in. Preserve embedded Worker assets.
+- Export the existing renderer-neutral `attachTerminalStream` from `/stream`, preserving `/browser`, with an xterm example and package/type/bundle footprint checks.
+
+- Run full CodeQL scans daily instead of on every main push, preserving PR and manual analysis and protecting active scheduled scans from cancellation.
+- Refresh Node.js types, tsdown, and WebSocket test tooling while preserving the dependency cooldown and supported Node.js versions. (#139, thanks @dependabot[bot])
+
 ## 0.3.11 - 2026-11-01
 
 **Highlights:** Preserve cancellation and terminal bytes across browser, Worker, and hub teardown; reduce buffer and asset overhead; ship focused integration guides.
