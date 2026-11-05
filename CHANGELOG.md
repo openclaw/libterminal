@@ -6,6 +6,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Update Vitest and its coverage provider to 5.1.0 and refresh Oxlint, retaining the two-day dependency cooldown and supported Node.js versions. (#154, thanks @dependabot[bot])
+
 - Route the GitHub issue chooser's community link through OpenClaw's Discord redirect with a repository placement tag.
 
 ## 0.4.0 - 2026-11-03
