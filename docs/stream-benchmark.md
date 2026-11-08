@@ -27,6 +27,39 @@ builds before running tests, so this case must run and pass in that gate; a skip
 case is not built-export validation. Its 45-second subprocess timeout sends
 SIGTERM to the benchmark parent, which cancels and reaps its current child.
 
+## Hosted full run
+
+The manual-only [Composed stream measurement workflow](../.github/workflows/benchmark-stream.yml)
+runs on one GitHub-hosted Ubuntu 24.04 runner with Node.js 24.22.1 and pnpm 11.28.4.
+It checks out the dispatch commit, installs with the frozen lockfile, and runs
+`pnpm check` before the full 24-cell command. It does not run on pushes or pull
+requests, publish packages, or deploy services.
+
+The workflow must be present on `main` before GitHub offers manual dispatch.
+Select a reviewed branch or tag whose exact commit you have recorded. The workflow
+has no separate target-SHA input: confirm the run's `head_sha` matches that commit
+before treating its results as evidence. The ref must remain unchanged while the
+dispatch resolves. A new run does not cancel a running measurement on the same ref;
+GitHub may replace an older pending run in that concurrency group.
+
+The report validator requires all 24 full cells, successful exits and child reaping,
+valid parity, cleanup and accounting, a clean matching source commit, matching build
+and harness hashes, and the pinned toolchain. The raw JSON remains unmodified.
+It is written outside the checkout and uploaded as
+`stream-benchmark-<commit>-<run-id>-<attempt>` with seven-day retention and a 2 MiB
+limit. Bounded, parseable JSON is uploaded even when the benchmark or validity
+checks fail. A missing, oversized, or malformed report fails validation and is not
+uploaded. Setup failures, forced cancellation, or runner loss can leave no report;
+that is an incomplete run, not a zero measurement.
+
+The check step has a 20-minute timeout, the benchmark step 14 minutes, and the job
+40 minutes. The existing per-child deadlines and owned-child cleanup still apply.
+Keep the run URL, exact commit, successful install/check logs, artifact ID/digest,
+and raw report together. Check the run conclusion and every cell's validity before
+summarizing. Hosted runner images and background load can change; three repetitions
+per cell are a synthetic screen, not 20 matched pairs or evidence of queue-only,
+renderer, PTY, or Rust performance benefits. There are no timing thresholds.
+
 ## Workloads and byte checks
 
 Each fresh child runs one cell: one scenario, publication arm, and repetition.
