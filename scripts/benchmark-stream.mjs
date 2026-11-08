@@ -288,7 +288,9 @@ export async function runControls(stream) {
   await tail.stop();
   assert.equal(
     drained.result().sha256,
-    createHash("sha256").update(new Uint8Array([1, 2, 3])).digest("hex"),
+    createHash("sha256")
+      .update(new Uint8Array([1, 2, 3]))
+      .digest("hex"),
   );
   let returned = false;
   const source = {
@@ -509,12 +511,13 @@ async function main() {
     timeout: 5000,
     maxBuffer: outputLimit,
   }).trim();
-  const sourceDirty = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 5000,
-    maxBuffer: outputLimit,
-  }).length > 0;
+  const sourceDirty =
+    execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 5000,
+      maxBuffer: outputLimit,
+    }).length > 0;
   const abort = new AbortController();
   const cancel = () => abort.abort();
   process.once("SIGINT", cancel);
