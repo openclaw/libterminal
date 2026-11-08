@@ -6,6 +6,7 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Added
 
+- Add a manual hosted full-stream measurement workflow with validated raw JSON artifacts.
 - Add an opt-in composed stream benchmark with byte-parity checks and per-child wall, CPU, and RSS observations.
 
 ### Changed
