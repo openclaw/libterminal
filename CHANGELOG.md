@@ -4,6 +4,10 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Add an opt-in composed stream benchmark with byte-parity checks and per-child wall, CPU, and RSS observations.
+
 ### Changed
 
 - Update Vitest and its coverage provider to 5.1.0 and refresh Oxlint, retaining the two-day dependency cooldown and supported Node.js versions. (#154, thanks @dependabot[bot])
