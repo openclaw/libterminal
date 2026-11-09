@@ -11,6 +11,8 @@ All notable changes to `@openclaw/libterminal` will be documented in this file.
 
 ### Changed
 
+- Update pnpm/action-setup to 6.1.1 and paired CodeQL initialization and analysis actions to 4.39.2, keeping the project on pnpm 11.28.4. (#156, thanks @dependabot[bot])
+
 - Refresh formatter, lint, and build tooling to oxfmt 0.76.0, Oxlint 1.91.0, and tsdown 0.23.5 while preserving the two-day dependency cooldown. (#157, thanks @dependabot[bot])
 
 - Update Vitest and its coverage provider to 5.1.0 and refresh Oxlint, retaining the two-day dependency cooldown and supported Node.js versions. (#154, thanks @dependabot[bot])
