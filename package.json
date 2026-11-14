@@ -86,22 +86,22 @@
     "typecheck": "pnpm run generate:worker-assets && tsc --noEmit && tsc -p tsconfig.portable.json --noEmit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
-    "@types/node": "^26.6.5",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.1.0",
     "@xterm/xterm": "6.0.0",
     "ghostty-web": "0.4.0",
     "node-pty": "^1.1.0",
-    "oxfmt": "^0.76.0",
-    "oxlint": "^1.90.0",
-    "oxlint-tsgolint": "^7.0.2005",
-    "tsdown": "^0.23.4",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.93.0",
+    "oxlint-tsgolint": "^7.0.2006",
+    "tsdown": "^0.23.7",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0",
-    "ws": "^8.22.0"
+    "ws": "^8.22.2"
   },
   "peerDependencies": {
     "ghostty-web": "0.4.0",
@@ -118,5 +118,5 @@
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },
-  "packageManager": "pnpm@11.28.4"
+  "packageManager": "pnpm@11.28.6"
 }

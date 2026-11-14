@@ -30,7 +30,7 @@ SIGTERM to the benchmark parent, which cancels and reaps its current child.
 ## Hosted full run
 
 The manual-only [Composed stream measurement workflow](../.github/workflows/benchmark-stream.yml)
-runs on one GitHub-hosted Ubuntu 24.04 runner with Node.js 24.22.1 and pnpm 11.28.4.
+runs on one GitHub-hosted Ubuntu 24.04 runner with Node.js 24.22.1 and pnpm 11.28.6.
 It checks out the dispatch commit, installs with the frozen lockfile, and runs
 `pnpm check` before the full 24-cell command. It does not run on pushes or pull
 requests, publish packages, or deploy services.
