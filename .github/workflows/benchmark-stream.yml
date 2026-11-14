@@ -28,7 +28,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 11.28.4
+          version: 11.28.6
           run_install: false
 
       - name: Set up Node
@@ -39,7 +39,7 @@ jobs:
       - name: Verify toolchain and install dependencies
         run: |
           test "$(node --version)" = v24.22.1
-          test "$(pnpm --version)" = 11.28.4
+          test "$(pnpm --version)" = 11.28.6
           pnpm install --frozen-lockfile
 
       - name: Check
@@ -100,7 +100,7 @@ jobs:
             assert.equal(provenance.node, "v24.22.1");
             assert.equal(provenance.platform, "linux");
             assert.equal(provenance.arch, "x64");
-            assert.equal(provenance.packageManager, "pnpm@11.28.4");
+            assert.equal(provenance.packageManager, "pnpm@11.28.6");
             assert.equal(provenance.harnessSha256, harnessSha256);
             assert.equal(provenance.buildSha256, build.buildSha256);
             assert.deepEqual(provenance.buildFiles, build.buildFiles);
