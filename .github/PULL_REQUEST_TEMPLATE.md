@@ -1,6 +1,14 @@
 ## Summary
 
-<!-- What changed and why? -->
+<!-- What changed and why?
+Lead with the problem, task, or value for terminal consumers, then explain the
+implementation. Keep the summary specific to this change.
+
+Illustrative example:
+Implementation-first: "Update the stream cancellation handler."
+Reader-first: "Cancelled terminal streams can leave readers waiting. Propagate
+cancellation to the reader so consumers can finish cleanup."
+-->
 
 ## Compatibility And Security
 
@@ -8,7 +16,16 @@
 
 ## Validation
 
-<!-- List exact commands and manual checks run. -->
+<!-- List exact commands and manual checks run.
+Lead with what validation demonstrated and any gaps, then give the commands or
+logs that support it. Distinguish passed, failed, and unrun checks.
+
+Illustrative example (only claim results you verified):
+Command-first: "Ran pnpm test."
+Outcome-first: "The cancellation regression test passes: the reader finishes
+without dropping queued output. Verified with pnpm test. Browser and Worker
+integration checks were not run."
+-->
 
 - [ ] Tests added or updated when behavior changed
 - [ ] Browser, Node.js, and Worker impact considered
