@@ -94,7 +94,7 @@
     "@xterm/xterm": "6.0.0",
     "ghostty-web": "0.4.0",
     "node-pty": "^1.1.0",
-    "oxfmt": "^0.79.0",
+    "oxfmt": "^0.80.0",
     "oxlint": "^1.93.0",
     "oxlint-tsgolint": "^7.0.2006",
     "tsdown": "^0.23.7",
